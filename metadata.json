@@ -1,0 +1,6 @@
+{
+  "name": "Quản Lý Kho & Hóa Đơn VAT",
+  "description": "Ứng dụng quản lý kho VAT nhập/xuất tinh gọn, quét hóa đơn tự động từ Gmail và báo cáo tồn kho thông minh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
