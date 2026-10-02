@@ -13,12 +13,12 @@ REVIEW_REQUESTED
 ## Tham chiếu
 - Branch: deploy/render-persistent-auth
 - Pull Request: https://github.com/nguyenbahoa20-dotcom/QLKHOVATFIX/pull/3
-- Tệp hoặc màn hình liên quan: `server.ts`, `src/db/sqliteServer.ts`, `vite.config.ts`, `render.yaml`, `README.md`
+- Tệp hoặc màn hình liên quan: `server.ts`, `src/db/sqliteServer.ts`, `src/components/Navbar.tsx`, `chay_phan_mem.bat`, `start_servers.bat`, `vite.config.ts`, `render.yaml`, `README.md`
 
 ## Kết quả thực hiện
-- Tóm tắt thay đổi: Thêm xác thực Basic chỉ trong production, kiểm tra nguồn cho thao tác ghi, đọc `PORT`, dùng đường dẫn SQLite cấu hình được; thay Pages bằng Blueprint Render; ẩn nút tắt máy chủ trên bản production.
-- Tệp đã sửa: `server.ts`, `src/db/sqliteServer.ts`, `src/components/Navbar.tsx`, `vite.config.ts`, `.env.example`, `.github/workflows/main.yml`, `render.yaml`, `README.md`, `AI_HANDOFF.md`.
-- Kiểm tra đã chạy và kết quả: GitHub Actions #8 thành công: cài thư viện theo bun.lock, kiểm tra TypeScript và build app/server. Không chạy được npm install cục bộ trong môi trường làm việc hiện tại.
+- Tóm tắt thay đổi: Thêm bảo vệ cho bản production, cấu hình host và SQLite bền vững, thay GitHub Pages bằng Blueprint Render; sửa khởi động từ ZIP có DB 0 byte, báo lỗi nếu cài thư viện thất bại, tránh đóng nhầm mọi tiến trình Node.
+- Tệp đã sửa: `server.ts`, `src/db/sqliteServer.ts`, `src/components/Navbar.tsx`, `chay_phan_mem.bat`, `start_servers.bat`, `vite.config.ts`, `.env.example`, `.github/workflows/main.yml`, `render.yaml`, `README.md`, `AI_HANDOFF.md`.
+- Kiểm tra đã chạy và kết quả: GitHub Actions #10 thành công: cài thư viện theo bun.lock, kiểm tra TypeScript và build app/server. Không chạy được npm install cục bộ trong môi trường làm việc hiện tại.
 
 ## Việc tiếp theo
 - Người/AI nhận việc: Người dùng xem Pull Request, sau đó chấp nhận hoặc yêu cầu sửa.
