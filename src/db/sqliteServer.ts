@@ -440,6 +440,13 @@ export function getAllEmailLogs(db: Database): EmailLog[] {
     columns.forEach((col, idx) => {
       obj[col] = row[idx];
     });
+    const status: EmailLog['status'] =
+      obj.status === 'SUCCESS'
+        ? 'SUCCESS'
+        : obj.status === 'NO_VAT_FOUND'
+          ? 'NO_VAT_FOUND'
+          : 'ERROR';
+
     return {
       id: obj.id,
       timestamp: obj.timestamp,
@@ -447,7 +454,7 @@ export function getAllEmailLogs(db: Database): EmailLog[] {
       subject: obj.subject,
       hasAttachment: Boolean(obj.hasAttachment),
       attachmentName: obj.attachmentName,
-      status: obj.status as 'SUCCESS' | 'FAILED' | 'NO_VAT_FOUND',
+      status,
       invoiceId: obj.invoiceId,
       parsedItemCount: Number(obj.parsedItemCount),
     };
