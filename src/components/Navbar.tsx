@@ -199,7 +199,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {/* Thoát Ứng Dụng (Shutdown Server) */}
-            {onShutdownApp && (
+            {onShutdownApp && !(import.meta as any).env?.PROD && (
               <button
                 onClick={() => {
                   if (confirm('Bạn có chắc chắn muốn THOÁT PHẦN MỀM và đóng toàn bộ tiến trình ngầm (CMD, Python)?')) {

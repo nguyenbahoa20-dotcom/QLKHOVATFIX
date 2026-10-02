@@ -1,20 +1,30 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# QLKHOVATFIX — Quản lý kho và hóa đơn VAT
 
-# Run and deploy your AI Studio app
+Ứng dụng gồm giao diện React, máy chủ Express và cơ sở dữ liệu SQLite. Không thể triển khai dưới dạng trang GitHub Pages tĩnh.
 
-This contains everything you need to run your app locally.
+## Chạy trên máy tính
 
-View your app in AI Studio: https://ai.studio/apps/3ab1fa50-a701-427e-ab7b-de6a5d7a421b
+1. Cài Node.js phiên bản 22 trở lên.
+2. Mở thư mục dự án và chạy `npm install`.
+3. Sao chép `.env.example` thành `.env`, rồi điền `ADMIN_USERNAME` và `ADMIN_PASSWORD` nếu chạy ở chế độ production. Mật khẩu phải dài ít nhất 16 ký tự.
+4. Chạy `npm run dev`.
 
-## Run Locally
+Khi chạy chế độ phát triển (`npm run dev`), đăng nhập được tắt để dễ kiểm tra cục bộ. Không đưa máy chủ phát triển ra Internet.
 
-**Prerequisites:**  Node.js
+## Triển khai trực tuyến bằng Render
 
+Tệp `render.yaml` cấu hình máy chủ Node dùng đúng phiên bản thư viện trong `bun.lock`, có ổ lưu trữ bền vững cho SQLite và tự cập nhật khi nhánh `main` đổi.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. Đưa các thay đổi triển khai vào `main` sau khi xem và chấp nhận Pull Request.
+2. Tạo tài khoản Render, chọn **New → Blueprint**, rồi kết nối repository GitHub `nguyenbahoa20-dotcom/QLKHOVATFIX`.
+3. Khi Render hỏi giá trị bí mật, nhập tên đăng nhập và mật khẩu riêng. Mật khẩu phải có ít nhất 16 ký tự. Không ghi các giá trị này vào GitHub.
+4. Xác nhận cấu hình và chi phí trong Render để tạo dịch vụ. Khi hoàn tất, Render cấp link dạng `https://<tên-dịch-vụ>.onrender.com`.
+5. Mở link và đăng nhập bằng thông tin đã đặt. Trình duyệt sẽ hiện hộp thoại đăng nhập.
+
+Blueprint dùng gói máy chủ trả phí nhỏ nhất và ổ lưu trữ 1 GB để giữ dữ liệu sau khi khởi động lại. Giá có thể thay đổi; hãy xác nhận số tiền ở trang Render trước khi tạo dịch vụ. Có thể thêm `GEMINI_API_KEY` trong trang quản lý dịch vụ nếu muốn dùng phân tích Gemini; ứng dụng vẫn mở được khi chưa có khóa này.
+
+## Kiểm tra
+
+- `npm run lint` kiểm tra TypeScript.
+- `npm run build` dựng giao diện và máy chủ.
+- GitHub Actions chạy hai bước này cho Pull Request và thay đổi trên `main`.

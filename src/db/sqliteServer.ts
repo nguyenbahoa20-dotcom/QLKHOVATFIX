@@ -4,7 +4,7 @@ import path from 'path';
 import { initialCompanies, initialInventoryItems, initialInvoices, initialEmailLogs, initialGmailConfig } from '../data/initialData.js';
 import { Company, InventoryItem, Invoice, EmailLog, GmailConfig } from '../types.js';
 
-const DB_FILE_PATH = path.join(process.cwd(), 'vat_database.db');
+export const DB_FILE_PATH = process.env.VAT_DATABASE_PATH || path.join(process.cwd(), 'vat_database.db');
 
 let dbInstance: Database | null = null;
 
@@ -37,6 +37,7 @@ export async function getDatabase(): Promise<Database> {
  */
 export function saveDatabase(db: Database = dbInstance!) {
   if (!db) return;
+  fs.mkdirSync(path.dirname(DB_FILE_PATH), { recursive: true });
   const binaryArray = db.export();
   const buffer = Buffer.from(binaryArray);
   fs.writeFileSync(DB_FILE_PATH, buffer);
@@ -879,4 +880,3 @@ export function restoreBackupJson(db: Database, data: any) {
 
   saveDatabase(db);
 }
-
