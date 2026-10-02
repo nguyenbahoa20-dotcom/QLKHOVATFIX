@@ -158,7 +158,7 @@ def init_sqlite_db():
         ]
         c.executemany("INSERT OR IGNORE INTO inventory (id, companyId, sku, name, category, unit, totalInbound, totalOutbound, currentStock, minStockThreshold, averageCost, lastUpdated, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", sample_inv)
 
-        sample_gmail = (1, "ketoan.vat.company@gmail.com", "abcd efgh ijkl mnop", 1, 15, "2026-07-29 08:30:00", "imap.gmail.com", 993, 1, "giamdoc@company.com.vn")
+        sample_gmail = (1, "ketoan.vat.company@gmail.com", "", 0, 15, "2026-07-29 08:30:00", "imap.gmail.com", 993, 1, "giamdoc@company.com.vn")
         c.execute("INSERT OR IGNORE INTO gmail_config VALUES (?,?,?,?,?,?,?,?,?,?)", sample_gmail)
 
         conn.commit()
