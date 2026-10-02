@@ -4,12 +4,12 @@
 
 ## Chạy trên máy tính
 
-1. Cài Node.js phiên bản 22 trở lên.
-2. Mở thư mục dự án và chạy `npm install`.
-3. Sao chép `.env.example` thành `.env`, rồi điền `ADMIN_USERNAME` và `ADMIN_PASSWORD` nếu chạy ở chế độ production. Mật khẩu phải dài ít nhất 16 ký tự.
-4. Chạy `npm run dev`.
+1. Giải nén ZIP bằng **Extract All**; không chạy trực tiếp bên trong cửa sổ ZIP.
+2. Cài Node.js phiên bản 22 trở lên.
+3. Khi có Internet, nhấp đúp `chay_phan_mem.bat`. File này cài thư viện ở lần chạy đầu, rồi mở ứng dụng.
+4. Các lần sau có thể chạy lại `chay_phan_mem.bat` khi offline. Tính năng Gemini cần Internet.
 
-Khi chạy chế độ phát triển (`npm run dev`), đăng nhập được tắt để dễ kiểm tra cục bộ. Không đưa máy chủ phát triển ra Internet.
+Khi chạy chế độ phát triển, đăng nhập được tắt để dễ kiểm tra cục bộ. Không đưa máy chủ phát triển ra Internet. Nếu chạy lệnh production `npm start`, cần điền `ADMIN_USERNAME` và `ADMIN_PASSWORD` trong `.env`; mật khẩu phải dài ít nhất 16 ký tự.
 
 ## Triển khai trực tuyến bằng Render
 

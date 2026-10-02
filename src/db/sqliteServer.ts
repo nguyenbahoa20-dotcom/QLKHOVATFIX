@@ -16,10 +16,12 @@ export async function getDatabase(): Promise<Database> {
 
   const SQL = await initSqlJs();
 
-  if (fs.existsSync(DB_FILE_PATH)) {
+  if (fs.existsSync(DB_FILE_PATH) && fs.statSync(DB_FILE_PATH).size > 0) {
     const fileBuffer = fs.readFileSync(DB_FILE_PATH);
     dbInstance = new SQL.Database(fileBuffer);
   } else {
+    // AI Studio ZIP exports may include an empty placeholder database file.
+    // Treat it like a new database instead of crashing during startup.
     dbInstance = new SQL.Database();
     initSchemaAndSeed(dbInstance);
     saveDatabase(dbInstance);

@@ -1,6 +1,7 @@
 @echo off
 chcp 65001 >nul
 title TaxVault Pro - HE THONG QUAN LY KHO VAT VA GMAIL LOCAL
+cd /d "%~dp0"
 
 echo ======================================================================
 echo   HE THONG QUAN LY KHO VAT VA GMAIL (NODE.JS + SQLITE LOCAL)
@@ -18,14 +19,27 @@ if %errorlevel% neq 0 (
 )
 
 REM 2. Tu dong kiem tra va cai dat thu vien node_modules neu thieu
-if not exist "node_modules\" (
+if not exist "node_modules\.bin\tsx.cmd" (
     echo.
     echo [THONG BAO] Chua tim thay thu vien node_modules. Dang tu dong chay npm install...
     echo Vui long cho trong giay lat (chi thuc hien lan dau tien)...
     call npm install
+    if errorlevel 1 (
+        echo.
+        echo [LOI] Khong cai duoc thu vien can thiet.
+        echo Hay kiem tra ket noi Internet, sau do chay lai file nay.
+        pause
+        exit /b 1
+    )
     echo.
 ) else (
     echo [2/3] Moi truong thu vien node_modules da san sang.
+)
+
+if not exist "node_modules\.bin\tsx.cmd" (
+    echo [LOI] Thu vien khoi dong chua duoc cai dat.
+    pause
+    exit /b 1
 )
 
 REM 3. Khoi chay Server va Tu dong mo trinh duyet web
@@ -50,6 +64,5 @@ echo   PHAN MEM DA DUOC DONG AN TOAN. TOAN BO DU LIEU DA DUOC LUU!
 echo ======================================================================
 timeout /t 2 >nul
 exit
-
 
 
