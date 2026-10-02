@@ -1,9 +1,26 @@
-import { InventoryItem, Invoice, GmailConfig, EmailLog } from '../types';
+import { Company, InventoryItem, Invoice, GmailConfig, EmailLog } from '../types';
+
+export const initialCompanies: Company[] = [
+  {
+    id: 'comp-1',
+    name: 'Công ty TNHH Công Nghệ & Thương Mại ABC',
+    taxCode: '0109887766',
+    address: 'Số 18 Phạm Hùng, Q. Nam Từ Liêm, Hà Nội',
+    isDefault: true,
+  },
+  {
+    id: 'comp-2',
+    name: 'Công ty Cổ phần Đầu tư & Thiết bị XYZ',
+    taxCode: '0312345678',
+    address: '72 Lê Thánh Tôn, Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+    isDefault: false,
+  },
+];
 
 export const initialGmailConfig: GmailConfig = {
   email: 'doanhnghiep.vat@gmail.com',
-  appPassword: 'abcd efgh ijkl mnop',
-  isConnected: true,
+  appPassword: '',
+  isConnected: false,
   autoScanIntervalMinutes: 15,
   lastSyncTime: '2026-07-29 08:30:00',
   imapHost: 'imap.gmail.com',
@@ -15,6 +32,7 @@ export const initialGmailConfig: GmailConfig = {
 export const initialInventoryItems: InventoryItem[] = [
   {
     id: 'inv-1',
+    companyId: 'comp-1',
     sku: 'LAP-DEL-15',
     name: 'Máy tính xách tay Dell Vostro 15 (i5/16GB/512GB)',
     category: 'Thiết bị điện tử',
@@ -29,6 +47,7 @@ export const initialInventoryItems: InventoryItem[] = [
   },
   {
     id: 'inv-2',
+    companyId: 'comp-1',
     sku: 'MON-LG-27',
     name: 'Màn hình máy tính LG 27 inch Full HD 100Hz',
     category: 'Thiết bị điện tử',
@@ -43,6 +62,7 @@ export const initialInventoryItems: InventoryItem[] = [
   },
   {
     id: 'inv-3',
+    companyId: 'comp-1',
     sku: 'MOU-LOG-M330',
     name: 'Chuột không dây Logitech M330 Silent',
     category: 'Phụ kiện',
@@ -57,6 +77,7 @@ export const initialInventoryItems: InventoryItem[] = [
   },
   {
     id: 'inv-4',
+    companyId: 'comp-1',
     sku: 'KEY-LOG-K380',
     name: 'Bàn phím Bluetooth Logitech K380 Multi-Device',
     category: 'Phụ kiện',
@@ -71,6 +92,7 @@ export const initialInventoryItems: InventoryItem[] = [
   },
   {
     id: 'inv-5',
+    companyId: 'comp-1',
     sku: 'PAP-A4-70GSM',
     name: 'Giấy in Double A Khổ A4 Định lượng 70gsm (Ram 500 tờ)',
     category: 'Văn phòng phẩm',
@@ -85,6 +107,7 @@ export const initialInventoryItems: InventoryItem[] = [
   },
   {
     id: 'inv-6',
+    companyId: 'comp-1',
     sku: 'PRN-HP-107A',
     name: 'Máy in Laser đơn năng HP Laser 107a',
     category: 'Thiết bị văn phòng',
@@ -99,6 +122,7 @@ export const initialInventoryItems: InventoryItem[] = [
   },
   {
     id: 'inv-7',
+    companyId: 'comp-1',
     sku: 'CAB-HDMI-2M',
     name: 'Cáp kết nối HDMI 2.0 bọc dù 4K 2m',
     category: 'Phụ kiện',
@@ -110,12 +134,29 @@ export const initialInventoryItems: InventoryItem[] = [
     averageCost: 65000,
     lastUpdated: '2026-07-10',
     note: 'Còn nhiều',
+  },
+  // Sample inventory for Company 2
+  {
+    id: 'inv-8',
+    companyId: 'comp-2',
+    sku: 'CAM-LOG-C920',
+    name: 'Webcam Logitech C920 HD Pro 1080p',
+    category: 'Thiết bị văn phòng',
+    unit: 'Cái',
+    totalInbound: 30,
+    totalOutbound: 5,
+    currentStock: 25,
+    minStockThreshold: 5,
+    averageCost: 1850000,
+    lastUpdated: '2026-07-26',
+    note: 'Chi nhánh TP.HCM',
   }
 ];
 
 export const initialInvoices: Invoice[] = [
   {
     id: 'inv-doc-1',
+    companyId: 'comp-1',
     invoiceNumber: '0004521',
     symbol: 'C24TBA',
     date: '2026-07-28',
@@ -153,6 +194,7 @@ export const initialInvoices: Invoice[] = [
   },
   {
     id: 'inv-doc-2',
+    companyId: 'comp-1',
     invoiceNumber: '0008912',
     symbol: 'K24MBB',
     date: '2026-07-29',

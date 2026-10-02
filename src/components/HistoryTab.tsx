@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { 
   History, ArrowDownLeft, ArrowUpRight, Search, FileText, Calendar, 
-  Building2, ChevronDown, ChevronUp, Download, CheckCircle2 
+  Building2, ChevronDown, ChevronUp, Download, CheckCircle2, Trash2 
 } from 'lucide-react';
 import { Invoice } from '../types';
 
 interface HistoryTabProps {
   invoices: Invoice[];
   onExportExcel: () => void;
+  onDeleteInvoice?: (id: string) => void;
+  onClearAllInvoices?: () => void;
 }
 
-export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel }) => {
+export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel, onDeleteInvoice, onClearAllInvoices }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'INBOUND' | 'OUTBOUND'>('ALL');
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
@@ -19,12 +21,15 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel 
     setExpandedInvoiceId(expandedInvoiceId === id ? null : id);
   };
 
-  const filteredInvoices = invoices.filter((inv) => {
+  const safeInvoices = Array.isArray(invoices) ? invoices : [];
+
+  const filteredInvoices = safeInvoices.filter((inv) => {
+    if (!inv) return false;
     const matchesSearch =
-      inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.partnerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.partnerTaxCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.symbol.toLowerCase().includes(searchTerm.toLowerCase());
+      (inv.invoiceNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv.partnerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv.partnerTaxCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv.symbol || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     if (!matchesSearch) return false;
 
@@ -33,13 +38,13 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel 
     return true;
   });
 
-  const totalInboundAmount = invoices
-    .filter((inv) => inv.type === 'INBOUND')
-    .reduce((sum, inv) => sum + inv.totalWithTax, 0);
+  const totalInboundAmount = safeInvoices
+    .filter((inv) => inv && inv.type === 'INBOUND')
+    .reduce((sum, inv) => sum + (inv.totalWithTax || 0), 0);
 
-  const totalOutboundAmount = invoices
-    .filter((inv) => inv.type === 'OUTBOUND')
-    .reduce((sum, inv) => sum + inv.totalWithTax, 0);
+  const totalOutboundAmount = safeInvoices
+    .filter((inv) => inv && inv.type === 'OUTBOUND')
+    .reduce((sum, inv) => sum + (inv.totalWithTax || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -51,7 +56,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel 
               Tổng Số Hóa Đơn VAT
             </p>
             <h3 className="text-3xl font-black text-white tracking-tight">
-              {invoices.length} <span className="text-xs font-semibold text-slate-400">chứng từ</span>
+              {safeInvoices.length} <span className="text-xs font-semibold text-slate-400">chứng từ</span>
             </h3>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-slate-800 text-blue-400 border border-slate-700 flex items-center justify-center font-bold">
@@ -109,7 +114,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel 
                 typeFilter === 'ALL' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Tất cả ({invoices.length})
+              Tất cả ({safeInvoices.length})
             </button>
             <button
               onClick={() => setTypeFilter('INBOUND')}
@@ -138,144 +143,196 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel 
             <Download className="w-3.5 h-3.5 text-emerald-600" />
             <span>Xuất Excel</span>
           </button>
+
+          {safeInvoices.length > 0 && onClearAllInvoices && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`CẢNH BÁO: Bạn có chắc chắn muốn XÓA TẤT CẢ ${safeInvoices.length} hóa đơn VAT khỏi CSDL SQLite?\n\nToàn bộ chứng từ sẽ bị xóa sạch khỏi CSDL và tồn kho sẽ được cập nhật!`)) {
+                  onClearAllInvoices();
+                }
+              }}
+              className="px-3.5 py-2.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white border border-rose-200 rounded-2xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Xóa toàn bộ lịch sử hóa đơn trong SQLite"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Xóa Tất Cả Hóa Đơn</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Invoice Bento Cards */}
-      <div className="space-y-4">
+      {/* Invoice Table List */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xs">
         {filteredInvoices.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-12 text-center text-slate-500 font-medium">
+          <div className="p-12 text-center text-slate-500 font-medium">
             Không có hóa đơn VAT nào khớp với tìm kiếm.
           </div>
         ) : (
-          filteredInvoices.map((inv) => {
-            const isExpanded = expandedInvoiceId === inv.id;
-            const isInbound = inv.type === 'INBOUND';
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-100/80 text-slate-700 font-bold uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3.5">Thời gian nạp</th>
+                  <th className="px-4 py-3.5">Loại</th>
+                  <th className="px-4 py-3.5">Số HĐ</th>
+                  <th className="px-4 py-3.5">Ký hiệu</th>
+                  <th className="px-4 py-3.5">Đối tác</th>
+                  <th className="px-4 py-3.5 text-right">Tổng tiền (VNĐ)</th>
+                  <th className="px-4 py-3.5 text-center">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-sans">
+                {filteredInvoices.map((inv) => {
+                  const isExpanded = expandedInvoiceId === inv.id;
+                  const isInbound = inv.type === 'INBOUND';
 
-            return (
-              <div
-                key={inv.id}
-                className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-md hover:border-slate-300 transition-all"
-              >
-                {/* Invoice Card Header */}
-                <div
-                  onClick={() => toggleExpand(inv.id)}
-                  className="p-5 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors"
-                >
-                  <div className="flex items-start gap-3.5">
-                    <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold ${
-                        isInbound
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                      }`}
-                    >
-                      {isInbound ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
-                    </div>
+                  return (
+                    <React.Fragment key={inv.id}>
+                      <tr className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-4 py-3.5 font-mono text-slate-600 whitespace-nowrap">
+                          {inv.date}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold inline-flex items-center gap-1 ${
+                              isInbound
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {isInbound ? (
+                              <>
+                                <ArrowDownLeft className="w-3 h-3" />
+                                Mua vào
+                              </>
+                            ) : (
+                              <>
+                                <ArrowUpRight className="w-3 h-3" />
+                                Bán ra
+                              </>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 font-mono font-black text-slate-900 whitespace-nowrap">
+                          {inv.invoiceNumber}
+                        </td>
+                        <td className="px-4 py-3.5 font-mono font-bold text-slate-700 whitespace-nowrap">
+                          {inv.symbol || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="font-semibold text-slate-800 line-clamp-1">{inv.partnerName}</div>
+                          {inv.partnerTaxCode && (
+                            <div className="text-[11px] text-slate-400 font-mono">MST: {inv.partnerTaxCode}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-black text-slate-900 whitespace-nowrap">
+                          {(inv.totalWithTax || 0).toLocaleString('vi-VN')}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(inv.id)}
+                              className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 transition-all flex items-center gap-1 cursor-pointer"
+                              title="Xem chi tiết sản phẩm"
+                            >
+                              <span>Chi tiết</span>
+                              {isExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                              )}
+                            </button>
 
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
-                            isInbound
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {isInbound ? 'Hóa Đơn Mua Vào (Nhập)' : 'Hóa Đơn Bán Ra (Xuất)'}
-                        </span>
+                            {onDeleteInvoice && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (
+                                    confirm(
+                                      'Bạn có chắc chắn muốn xóa hóa đơn này? Số lượng tồn kho sẽ được trừ ngược lại.'
+                                    )
+                                  ) {
+                                    onDeleteInvoice(inv.id || inv.invoiceNumber);
+                                  }
+                                }}
+                                className="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer shadow-2xs group"
+                                title="Xóa hóa đơn và trừ/khôi phục lại số lượng hàng trong kho"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-600 group-hover:text-white" />
+                                <span>Xóa</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
 
-                        <span className="font-mono text-sm font-extrabold text-slate-900">
-                          Mẫu: {inv.symbol} - Số: {inv.invoiceNumber}
-                        </span>
+                      {/* Invoice Expanded Item Breakdown Table */}
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={7} className="p-0 bg-slate-50/80">
+                            <div className="p-5 border-t border-b border-slate-200 space-y-3">
+                              <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                Chi tiết sản phẩm trong Hóa Đơn Số {inv.invoiceNumber} ({(inv.items || []).length} mặt hàng)
+                              </h4>
 
-                        <span className="text-xs text-slate-400 font-mono">
-                          ({inv.date})
-                        </span>
-                      </div>
+                              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+                                <table className="w-full text-left text-xs">
+                                  <thead className="bg-slate-100 text-slate-700 font-semibold uppercase">
+                                    <tr>
+                                      <th className="px-3 py-2">STT</th>
+                                      <th className="px-3 py-2">Mã SKU</th>
+                                      <th className="px-3 py-2">Tên sản phẩm</th>
+                                      <th className="px-3 py-2 text-center">ĐVT</th>
+                                      <th className="px-3 py-2 text-right">Số lượng</th>
+                                      <th className="px-3 py-2 text-right">Đơn giá (VNĐ)</th>
+                                      <th className="px-3 py-2 text-right">Thành tiền</th>
+                                      <th className="px-3 py-2 text-center">VAT (%)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100 font-mono">
+                                    {(Array.isArray(inv.items) ? inv.items : []).map((item, idx) => (
+                                      <tr key={item.id || idx} className="hover:bg-slate-50">
+                                        <td className="px-3 py-2 text-slate-400 text-center">{idx + 1}</td>
+                                        <td className="px-3 py-2 font-semibold text-slate-800">{item.sku}</td>
+                                        <td className="px-3 py-2 text-slate-900 font-sans">{item.name}</td>
+                                        <td className="px-3 py-2 text-center font-sans">{item.unit}</td>
+                                        <td className="px-3 py-2 text-right font-bold text-slate-900">
+                                          {(item.quantity || 0).toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
+                                        </td>
+                                        <td className="px-3 py-2 text-right">
+                                          {(item.unitPrice || 0).toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-semibold">
+                                          {((item.quantity || 0) * (item.unitPrice || 0)).toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
+                                        </td>
+                                        <td className="px-3 py-2 text-center font-bold text-blue-600">{item.vatRate ?? 8}%</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
 
-                      <div className="flex items-center gap-2 text-xs text-slate-600 mt-1">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="font-medium text-slate-800">{inv.partnerName}</span>
-                        <span className="text-slate-400">| MST: {inv.partnerTaxCode}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between md:justify-end gap-6 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100">
-                    <div className="text-right">
-                      <p className="text-[11px] text-slate-500 font-medium">Tổng tiền có VAT</p>
-                      <p className="text-base font-extrabold text-slate-900 font-mono">
-                        {inv.totalWithTax.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-500">VNĐ</span>
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-1 text-[10px] font-medium bg-slate-100 text-slate-600 rounded border border-slate-200">
-                        Nguồn: {inv.source}
-                      </span>
-                      {isExpanded ? (
-                        <ChevronUp className="w-5 h-5 text-slate-400" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-slate-400" />
+                              <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 pt-2 font-mono">
+                                <div>
+                                  Trước thuế: <b>{(inv.totalBeforeTax || 0).toLocaleString('vi-VN')} VNĐ</b> | Tiền VAT: <b>{(inv.vatAmount || 0).toLocaleString('vi-VN')} VNĐ</b>
+                                </div>
+                                <div className="text-slate-800 font-bold font-sans">
+                                  Cộng tiền thanh toán: <span className="text-blue-700 text-sm font-mono">{(inv.totalWithTax || 0).toLocaleString('vi-VN')} VNĐ</span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Invoice Expanded Item Breakdown Table */}
-                {isExpanded && (
-                  <div className="bg-slate-50/80 border-t border-slate-200 p-5 space-y-3">
-                    <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                      Chi tiết sản phẩm trong hóa đơn ({inv.items.length} mặt hàng)
-                    </h4>
-
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-100 text-slate-700 font-semibold uppercase">
-                          <tr>
-                            <th className="px-3 py-2">STT</th>
-                            <th className="px-3 py-2">Mã SKU</th>
-                            <th className="px-3 py-2">Tên sản phẩm</th>
-                            <th className="px-3 py-2 text-center">ĐVT</th>
-                            <th className="px-3 py-2 text-right">Số lượng</th>
-                            <th className="px-3 py-2 text-right">Đơn giá (VNĐ)</th>
-                            <th className="px-3 py-2 text-right">Thành tiền</th>
-                            <th className="px-3 py-2 text-center">VAT (%)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-mono">
-                          {inv.items.map((item, idx) => (
-                            <tr key={item.id} className="hover:bg-slate-50">
-                              <td className="px-3 py-2 text-slate-400 text-center">{idx + 1}</td>
-                              <td className="px-3 py-2 font-semibold text-slate-800">{item.sku}</td>
-                              <td className="px-3 py-2 text-slate-900 font-sans">{item.name}</td>
-                              <td className="px-3 py-2 text-center font-sans">{item.unit}</td>
-                              <td className="px-3 py-2 text-right font-bold text-slate-900">{item.quantity}</td>
-                              <td className="px-3 py-2 text-right">{item.unitPrice.toLocaleString('vi-VN')}</td>
-                              <td className="px-3 py-2 text-right font-semibold">
-                                {(item.quantity * item.unitPrice).toLocaleString('vi-VN')}
-                              </td>
-                              <td className="px-3 py-2 text-center font-bold text-blue-600">{item.vatRate}%</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 pt-2 font-mono">
-                      <div>
-                        Trước thuế: <b>{inv.totalBeforeTax.toLocaleString('vi-VN')} VNĐ</b> | Tiền VAT: <b>{inv.vatAmount.toLocaleString('vi-VN')} VNĐ</b>
-                      </div>
-                      <div className="text-slate-800 font-bold font-sans">
-                        Cộng tiền thanh toán: <span className="text-blue-700 text-sm font-mono">{inv.totalWithTax.toLocaleString('vi-VN')} VNĐ</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

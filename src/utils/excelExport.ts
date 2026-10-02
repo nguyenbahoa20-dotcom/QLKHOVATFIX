@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
-import { InventoryItem, Invoice } from '../types';
+import { Company, InventoryItem, Invoice } from '../types';
 
-export function exportInventoryToExcel(inventory: InventoryItem[], invoices: Invoice[]) {
+export function exportInventoryToExcel(inventory: InventoryItem[], invoices: Invoice[], company?: Company) {
   const wb = XLSX.utils.book_new();
 
   // 1. Sheet Tồn Kho Chi Tiết
@@ -27,7 +27,7 @@ export function exportInventoryToExcel(inventory: InventoryItem[], invoices: Inv
 
   const wsInventory = XLSX.utils.json_to_sheet(inventoryData);
 
-  // Styling / Column Widths for Sheet 1
+  // Column Widths
   wsInventory['!cols'] = [
     { wch: 6 },  // STT
     { wch: 16 }, // SKU
@@ -44,7 +44,8 @@ export function exportInventoryToExcel(inventory: InventoryItem[], invoices: Inv
     { wch: 35 }, // Note
   ];
 
-  XLSX.utils.book_append_sheet(wb, wsInventory, 'Báo Cáo Tồn Kho VAT');
+  const sheet1Name = company ? `Kho_${company.taxCode.slice(0, 10)}` : 'Báo Cáo Tồn Kho VAT';
+  XLSX.utils.book_append_sheet(wb, wsInventory, sheet1Name);
 
   // 2. Sheet Lịch Sử Hóa Đơn Nhập/Xuất
   const invoiceData: Array<Record<string, string | number>> = [];
@@ -95,5 +96,134 @@ export function exportInventoryToExcel(inventory: InventoryItem[], invoices: Inv
 
   // Export file
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `Bao_Cao_Kho_VAT_${dateStr}.xlsx`);
+  const companyPrefix = company ? `${company.name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20)}_` : '';
+  XLSX.writeFile(wb, `Bao_Cao_Kho_VAT_${companyPrefix}${dateStr}.xlsx`);
+}
+
+/**
+ * Export HTKK Standard VAT Declaration Sheet (Bảng Kê VAT Mua Vào & Bán Ra Chuẩn HTKK)
+ */
+export function exportHTKKVATToExcel(invoices: Invoice[], company?: Company) {
+  const wb = XLSX.utils.book_new();
+
+  const inboundInvoices = invoices.filter((i) => i.type === 'INBOUND');
+  const outboundInvoices = invoices.filter((i) => i.type === 'OUTBOUND');
+
+  // --- SHEET 1: BẢNG KÊ MUA VÀO (01-2/GTGT) ---
+  let inboundSumPreTax = 0;
+  let inboundSumVat = 0;
+
+  const inboundRows: Array<Record<string, string | number>> = [];
+
+  inboundInvoices.forEach((inv, idx) => {
+    inboundSumPreTax += inv.totalBeforeTax;
+    inboundSumVat += inv.vatAmount;
+
+    // Default average VAT rate from items
+    const avgVat = inv.items.length > 0 ? inv.items[0].vatRate : 10;
+
+    inboundRows.push({
+      'STT': idx + 1,
+      'Mẫu số & Ký hiệu HĐ': inv.symbol || 'C26TBA',
+      'Số hóa đơn': inv.invoiceNumber,
+      'Ngày, tháng, năm lập HĐ': inv.date,
+      'Tên người bán': inv.partnerName,
+      'Mã số thuế người bán': inv.partnerTaxCode || '',
+      'Doanh số mua chưa có thuế GTGT (VNĐ)': inv.totalBeforeTax,
+      'Thuế suất VAT (%)': `${avgVat}%`,
+      'Tiền thuế GTGT (VNĐ)': inv.vatAmount,
+      'Ghi chú': `Nhập từ ${inv.source}`
+    });
+  });
+
+  // Add Grand Total row for HTKK
+  inboundRows.push({
+    'STT': '',
+    'Mẫu số & Ký hiệu HĐ': '',
+    'Số hóa đơn': '',
+    'Ngày, tháng, năm lập HĐ': '',
+    'Tên người bán': 'TỔNG CỘNG BẢNG KÊ MUA VÀO',
+    'Mã số thuế người bán': '',
+    'Doanh số mua chưa có thuế GTGT (VNĐ)': inboundSumPreTax,
+    'Thuế suất VAT (%)': '',
+    'Tiền thuế GTGT (VNĐ)': inboundSumVat,
+    'Ghi chú': 'Sử dụng để kê khai HTKK (Tờ khai 01-2/GTGT)'
+  });
+
+  const wsInbound = XLSX.utils.json_to_sheet(inboundRows);
+  wsInbound['!cols'] = [
+    { wch: 6 },  // STT
+    { wch: 22 }, // Mau/Ky Hieu
+    { wch: 16 }, // So HD
+    { wch: 18 }, // Ngay lap
+    { wch: 42 }, // Ten nguoi ban
+    { wch: 20 }, // MST
+    { wch: 32 }, // Pretax
+    { wch: 16 }, // Thue suat
+    { wch: 24 }, // Vat amount
+    { wch: 30 }, // Ghi chu
+  ];
+
+  XLSX.utils.book_append_sheet(wb, wsInbound, 'Bảng Kê Mua Vào (01-2 GTGT)');
+
+  // --- SHEET 2: BẢNG KÊ BÁN RA (01-1/GTGT) ---
+  let outboundSumPreTax = 0;
+  let outboundSumVat = 0;
+
+  const outboundRows: Array<Record<string, string | number>> = [];
+
+  outboundInvoices.forEach((inv, idx) => {
+    outboundSumPreTax += inv.totalBeforeTax;
+    outboundSumVat += inv.vatAmount;
+
+    const avgVat = inv.items.length > 0 ? inv.items[0].vatRate : 10;
+
+    outboundRows.push({
+      'STT': idx + 1,
+      'Mẫu số & Ký hiệu HĐ': inv.symbol || 'C26TBA',
+      'Số hóa đơn': inv.invoiceNumber,
+      'Ngày, tháng, năm lập HĐ': inv.date,
+      'Tên người mua': inv.partnerName,
+      'Mã số thuế người mua': inv.partnerTaxCode || '',
+      'Doanh thu bán chưa có thuế GTGT (VNĐ)': inv.totalBeforeTax,
+      'Thuế suất VAT (%)': `${avgVat}%`,
+      'Tiền thuế GTGT (VNĐ)': inv.vatAmount,
+      'Ghi chú': `Xuất bán (${inv.source})`
+    });
+  });
+
+  // Add Grand Total row for HTKK
+  outboundRows.push({
+    'STT': '',
+    'Mẫu số & Ký hiệu HĐ': '',
+    'Số hóa đơn': '',
+    'Ngày, tháng, năm lập HĐ': '',
+    'Tên người mua': 'TỔNG CỘNG BẢNG KÊ BÁN RA',
+    'Mã số thuế người mua': '',
+    'Doanh thu bán chưa có thuế GTGT (VNĐ)': outboundSumPreTax,
+    'Thuế suất VAT (%)': '',
+    'Tiền thuế GTGT (VNĐ)': outboundSumVat,
+    'Ghi chú': 'Sử dụng để kê khai HTKK (Tờ khai 01-1/GTGT)'
+  });
+
+  const wsOutbound = XLSX.utils.json_to_sheet(outboundRows);
+  wsOutbound['!cols'] = [
+    { wch: 6 },  // STT
+    { wch: 22 }, // Mau/Ky Hieu
+    { wch: 16 }, // So HD
+    { wch: 18 }, // Ngay lap
+    { wch: 42 }, // Ten nguoi mua
+    { wch: 20 }, // MST
+    { wch: 32 }, // Pretax
+    { wch: 16 }, // Thue suat
+    { wch: 24 }, // Vat amount
+    { wch: 30 }, // Ghi chu
+  ];
+
+  XLSX.utils.book_append_sheet(wb, wsOutbound, 'Bảng Kê Bán Ra (01-1 GTGT)');
+
+  // Download File
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const companyTax = company ? `_MST_${company.taxCode}` : '';
+  XLSX.writeFile(wb, `Bang_Ke_VAT_HTKK${companyTax}_${dateStr}.xlsx`);
 }
