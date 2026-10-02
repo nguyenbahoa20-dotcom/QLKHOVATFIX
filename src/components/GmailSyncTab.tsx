@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Mail, Key, ShieldCheck, RefreshCw, FileText, CheckCircle2, AlertCircle, Info, Send, ArrowRight, Zap, ExternalLink } from 'lucide-react';
-import { GmailConfig, EmailLog } from '../types';
+import React, { useState, useRef } from 'react';
+import { Mail, Key, ShieldCheck, RefreshCw, FileText, CheckCircle2, AlertCircle, Info, Send, ArrowRight, Zap, ExternalLink, Upload, Sparkles } from 'lucide-react';
+import { GmailConfig, EmailLog, Invoice } from '../types';
+import { parseInvoiceXml } from '../utils/xmlParser';
 
 interface GmailSyncTabProps {
   config: GmailConfig;
@@ -9,6 +10,8 @@ interface GmailSyncTabProps {
   isScanning: boolean;
   onScanGmail: () => void;
   onSimulateInboundInvoice: () => void;
+  onImportXmlInvoice?: (invoice: Invoice) => void;
+  onImportXmlFiles?: (files: File[]) => void;
 }
 
 export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
@@ -18,11 +21,16 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
   isScanning,
   onScanGmail,
   onSimulateInboundInvoice,
+  onImportXmlInvoice,
+  onImportXmlFiles,
 }) => {
   const [formData, setFormData] = useState<GmailConfig>(config);
   const [showPassword, setShowPassword] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [testEmailStatus, setTestEmailStatus] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +47,81 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
     }, 1500);
   };
 
+  const processSelectedFiles = (fileList: FileList | File[]) => {
+    const files = Array.from(fileList).filter((f) => {
+      const lower = f.name.toLowerCase();
+      return lower.endsWith('.xml') || lower.endsWith('.pdf');
+    });
+
+    if (files.length === 0) {
+      setUploadStatus('Vui lòng chọn file hóa đơn điện tử dạng .XML hoặc .PDF');
+      setTimeout(() => setUploadStatus(null), 4000);
+      return;
+    }
+
+    if (onImportXmlFiles) {
+      onImportXmlFiles(files);
+    } else if (onImportXmlInvoice && files[0]) {
+      const file = files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const xmlContent = event.target?.result as string;
+          const parsed = parseInvoiceXml(xmlContent);
+          const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+          const invoice: Invoice = {
+            id: `inv-xml-${Date.now()}`,
+            invoiceNumber: parsed.invoiceNumber,
+            symbol: parsed.symbol,
+            date: parsed.date,
+            type: 'INBOUND',
+            partnerName: parsed.sellerName || 'Công ty Cổ phần Công Nghệ Á Châu',
+            partnerTaxCode: parsed.sellerTaxCode || '0109887766',
+            items: parsed.items,
+            totalBeforeTax: parsed.totalBeforeTax,
+            vatAmount: parsed.vatAmount,
+            totalWithTax: parsed.totalWithTax,
+            source: 'XML',
+            emailSubject: `Đã bóc tách từ file XML: ${file.name}`,
+            createdAt: nowStr,
+          };
+          onImportXmlInvoice(invoice);
+        } catch (err: any) {
+          setUploadStatus(`Lỗi bóc tách XML: ${err.message || 'File không hợp lệ'}`);
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+  };
+
+  const handleDirectXmlUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFiles = Array.from(e.target.files || []) as File[];
+    if (rawFiles.length > 0) {
+      processSelectedFiles(rawFiles);
+      e.target.value = '';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const rawFiles = Array.from(e.dataTransfer.files || []) as File[];
+    if (rawFiles.length > 0) {
+      processSelectedFiles(rawFiles);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Bento Hero Dark Card */}
@@ -47,13 +130,13 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
         <div className="relative z-10 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-800 text-blue-300 font-bold text-xs rounded-full border border-slate-700 mb-3">
             <Zap className="w-4 h-4 text-amber-400" />
-            <span>TỰ ĐỘNG BÓC TÁCH HÓA ĐƠN VAT TỪ GMAIL</span>
+            <span>TỰ ĐỘNG BÓC TÁCH HÓA ĐƠN VAT TỪ GMAIL & XML</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight mb-2 text-white">
             Kết Nối Gmail & Quét VAT Tự Động
           </h2>
           <p className="text-slate-300 text-xs sm:text-sm leading-relaxed mb-6">
-            Hệ thống rà soát hộp thư đến Gmail thông qua giao thức bảo mật IMAP, tự động phát hiện file hóa đơn VAT (XML/Excel), bóc tách mã hàng, số lượng, đơn giá và cộng dồn kho tức thì.
+            Hệ thống rà soát hộp thư đến Gmail thông qua giao thức bảo mật IMAP, tự động phát hiện file hóa đơn VAT (XML), bóc tách mã hàng, số lượng, đơn giá và cộng dồn kho tức thì vào SQLite CSDL.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -66,13 +149,63 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
             </button>
 
             <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-2xl transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Tải Lên File Hóa Đơn (.XML / .PDF)</span>
+            </button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xml,.pdf"
+              multiple
+              onChange={handleDirectXmlUpload}
+              className="hidden"
+            />
+
+            <button
               onClick={onSimulateInboundInvoice}
               className="px-5 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-2xl transition-all flex items-center gap-2"
             >
-              <FileText className="w-4 h-4 text-emerald-400" />
-              <span>Mô phỏng Nhận File VAT XML Mới</span>
+              <FileText className="w-4 h-4 text-amber-400" />
+              <span>Mô Phỏng Quét Gmail</span>
             </button>
           </div>
+
+          {/* Drag and Drop Zone for Single or Multiple XML/PDF Files */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`mt-6 p-6 rounded-2xl border-2 border-dashed transition-all text-center flex flex-col items-center justify-center gap-2 cursor-pointer ${
+              isDragging
+                ? 'bg-blue-600/20 border-blue-400 scale-[1.01]'
+                : 'bg-slate-800/60 border-slate-700/80 hover:border-slate-500 hover:bg-slate-800'
+            }`}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400">
+              <Upload className="w-6 h-6 animate-bounce" />
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-white">
+                Kéo & Thả Tập File XML / PDF Hóa Đơn Vào Đây (Hoặc Chọn Thư Mục/Nhiều File)
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Tự động bóc tách & chống nhập trùng dựa trên (Số HĐ + Ký hiệu + MST Người bán). Hệ thống tự tổng kết sau khi nạp!
+              </p>
+            </div>
+          </div>
+
+          {uploadStatus && (
+            <div className="mt-4 p-3 bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 rounded-2xl text-xs font-bold flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>{uploadStatus}</span>
+            </div>
+          )}
         </div>
       </div>
 

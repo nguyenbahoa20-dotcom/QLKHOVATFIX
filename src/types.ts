@@ -1,5 +1,13 @@
 export type InvoiceType = 'INBOUND' | 'OUTBOUND'; // INBOUND = Mua vào (Nhập), OUTBOUND = Bán ra (Xuất)
 
+export interface Company {
+  id: string;
+  name: string;
+  taxCode: string;
+  address?: string;
+  isDefault?: boolean;
+}
+
 export interface InvoiceItem {
   id: string;
   sku: string;
@@ -13,6 +21,7 @@ export interface InvoiceItem {
 
 export interface Invoice {
   id: string;
+  companyId?: string; // ID công ty sở hữu hóa đơn này
   invoiceNumber: string; // Số hóa đơn VAT (e.g. 0001234)
   symbol: string; // Ký hiệu hóa đơn (e.g. C24TBA)
   date: string; // YYYY-MM-DD
@@ -23,13 +32,14 @@ export interface Invoice {
   totalBeforeTax: number;
   vatAmount: number;
   totalWithTax: number;
-  source: 'GMAIL' | 'EXCEL' | 'XML' | 'MANUAL';
+  source: 'GMAIL' | 'EXCEL' | 'XML' | 'MANUAL' | 'PDF';
   emailSubject?: string;
   createdAt: string;
 }
 
 export interface InventoryItem {
   id: string;
+  companyId?: string; // ID công ty sở hữu mặt hàng này
   sku: string; // Mã sản phẩm
   name: string; // Tên sản phẩm
   category: string; // Danh mục

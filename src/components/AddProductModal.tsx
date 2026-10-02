@@ -160,9 +160,10 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
               </label>
               <input
                 type="number"
+                step="any"
                 min="0"
                 value={inbound}
-                onChange={(e) => setInbound(Number(e.target.value))}
+                onChange={(e) => setInbound(parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 text-sm bg-emerald-50/50 border border-emerald-200 rounded-xl text-emerald-900 font-bold font-mono"
               />
             </div>
@@ -173,9 +174,10 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
               </label>
               <input
                 type="number"
+                step="any"
                 min="0"
                 value={outbound}
-                onChange={(e) => setOutbound(Number(e.target.value))}
+                onChange={(e) => setOutbound(parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 text-sm bg-rose-50/50 border border-rose-200 rounded-xl text-rose-900 font-bold font-mono"
               />
             </div>
@@ -201,9 +203,10 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
               </label>
               <input
                 type="number"
+                step="any"
                 min="0"
                 value={avgCost}
-                onChange={(e) => setAvgCost(Number(e.target.value))}
+                onChange={(e) => setAvgCost(parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono"
               />
             </div>

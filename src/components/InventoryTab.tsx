@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, 
-  CheckCircle2, Download, Edit2, Trash2, ShieldAlert, FileSpreadsheet, Layers
+  CheckCircle2, Download, Edit2, Trash2, ShieldAlert, FileSpreadsheet, Layers, RefreshCw, Zap
 } from 'lucide-react';
 import { InventoryItem, InvoiceItem } from '../types';
 
@@ -14,6 +14,8 @@ interface InventoryTabProps {
   onDeleteItem: (sku: string) => void;
   onDeleteMultipleItems?: (skus: string[]) => void;
   onExportExcel: () => void;
+  onResetAllData?: () => void;
+  onResyncInventory?: () => void;
 }
 
 export const InventoryTab: React.FC<InventoryTabProps> = ({
@@ -25,6 +27,8 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
   onDeleteItem,
   onDeleteMultipleItems,
   onExportExcel,
+  onResetAllData,
+  onResyncInventory,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'LOW' | 'SAFE' | 'EMPTY'>('ALL');
@@ -131,7 +135,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
               Tổng Giá Trị Tồn Kho VAT
             </p>
             <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              {totalStockValue.toLocaleString('vi-VN')} <span className="text-xs font-semibold text-slate-400">VNĐ</span>
+              {totalStockValue.toLocaleString('vi-VN', { maximumFractionDigits: 4 })} <span className="text-xs font-semibold text-slate-400">VNĐ</span>
             </h3>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-slate-800 text-emerald-400 flex items-center justify-center font-bold border border-slate-700">
@@ -178,106 +182,117 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
         </div>
       </div>
 
-      {/* Control Bar & Actions - Bento Card */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        {/* Search Input */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Tìm theo Mã SKU, Tên sản phẩm, Danh mục..."
-            className="w-full pl-11 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 placeholder-slate-400 font-medium"
-          />
-        </div>
+      {/* Control Bar & Filters */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+        {/* Row 1: Search & Filters */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-lg">
+            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tìm theo Mã SKU, Tên sản phẩm, Danh mục..."
+              className="w-full pl-11 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 placeholder-slate-400 font-medium transition-all"
+            />
+          </div>
 
-        {/* Status Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3.5 py-2 text-xs font-bold rounded-2xl transition-all whitespace-nowrap ${
-              statusFilter === 'ALL'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Tất cả ({totalItems})
-          </button>
-
-          <button
-            onClick={() => setStatusFilter('LOW')}
-            className={`px-3.5 py-2 text-xs font-bold rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              statusFilter === 'LOW'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
-            }`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>Sắp hết ({lowStockCount})</span>
-          </button>
-
-          <button
-            onClick={() => setStatusFilter('SAFE')}
-            className={`px-3.5 py-2 text-xs font-bold rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              statusFilter === 'SAFE'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100'
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>An toàn ({totalItems - lowStockCount - emptyStockCount})</span>
-          </button>
-
-          {emptyStockCount > 0 && (
+          {/* Status Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 shrink-0">
             <button
-              onClick={() => setStatusFilter('EMPTY')}
-              className={`px-3.5 py-2 text-xs font-bold rounded-2xl transition-all whitespace-nowrap ${
-                statusFilter === 'EMPTY'
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'bg-rose-50 text-rose-900 border border-rose-200 hover:bg-rose-100'
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3.5 py-2 text-xs font-bold rounded-2xl transition-all whitespace-nowrap cursor-pointer ${
+                statusFilter === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Hết hàng ({emptyStockCount})
+              Tất cả ({totalItems})
             </button>
-          )}
+
+            <button
+              onClick={() => setStatusFilter('LOW')}
+              className={`px-3.5 py-2 text-xs font-bold rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                statusFilter === 'LOW'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Sắp hết ({lowStockCount})</span>
+            </button>
+
+            <button
+              onClick={() => setStatusFilter('SAFE')}
+              className={`px-3.5 py-2 text-xs font-bold rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                statusFilter === 'SAFE'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>An toàn ({totalItems - lowStockCount - emptyStockCount})</span>
+            </button>
+
+            {emptyStockCount > 0 && (
+              <button
+                onClick={() => setStatusFilter('EMPTY')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-2xl transition-all whitespace-nowrap cursor-pointer ${
+                  statusFilter === 'EMPTY'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-rose-50 text-rose-900 border border-rose-200 hover:bg-rose-100'
+                }`}
+              >
+                Hết hàng ({emptyStockCount})
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Primary Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {selectedSkus.length > 0 && (
+        {/* Divider */}
+        <div className="border-t border-slate-100" />
+
+        {/* Row 2: Operational Actions */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div>
+            {onResyncInventory && (
+              <button
+                onClick={onResyncInventory}
+                title="Tính toán và đồng bộ lại danh mục kho hàng từ các Hóa đơn VAT đã nhập"
+                className="px-4 py-2.5 text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-2xl transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+              >
+                <RefreshCw className="w-4 h-4 text-blue-600" />
+                <span>Đồng Bộ Kho Từ Hóa Đơn</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setIsBulkDeleteModalOpen(true)}
-              className="px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-2xl transition-all flex items-center gap-1.5 shadow-md animate-in fade-in zoom-in-95"
+              onClick={onOpenInboundInvoiceModal}
+              className="px-4 py-2.5 text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-2xl transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
-              <Trash2 className="w-4 h-4" />
-              <span>Xóa Các Mục Đã Chọn ({selectedSkus.length})</span>
+              <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
+              <span>+ Nhập Kho (V vào)</span>
             </button>
-          )}
 
-          <button
-            onClick={onOpenInboundInvoiceModal}
-            className="px-4 py-2.5 text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-2xl transition-all flex items-center gap-1.5 shadow-xs"
-          >
-            <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
-            <span>+ Nhập Kho (V vào)</span>
-          </button>
+            <button
+              onClick={onOpenOutboundInvoiceModal}
+              className="px-4 py-2.5 text-xs font-bold text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-2xl transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <ArrowUpRight className="w-4 h-4 text-rose-600" />
+              <span>- Xuất Kho (V ra)</span>
+            </button>
 
-          <button
-            onClick={onOpenOutboundInvoiceModal}
-            className="px-4 py-2.5 text-xs font-bold text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-2xl transition-all flex items-center gap-1.5 shadow-xs"
-          >
-            <ArrowUpRight className="w-4 h-4 text-rose-600" />
-            <span>- Xuất Kho (V ra)</span>
-          </button>
-
-          <button
-            onClick={onOpenAddModal}
-            className="px-4 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-2xl transition-all flex items-center gap-1.5 shadow-xs"
-          >
-            <Plus className="w-4 h-4 text-blue-400" />
-            <span>Sản Phẩm Mới</span>
-          </button>
+            <button
+              onClick={onOpenAddModal}
+              className="px-4 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-2xl transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-blue-400" />
+              <span>Sản Phẩm Mới</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -292,23 +307,28 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {selectedSkus.length > 0 && (
-              <button
-                onClick={() => setIsBulkDeleteModalOpen(true)}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-2xl shadow-xs flex items-center gap-1.5 transition-all"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Xóa các mục đã chọn ({selectedSkus.length})</span>
-              </button>
-            )}
-
             <button
               onClick={onExportExcel}
-              className="px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-2xl shadow-xs flex items-center gap-1.5 transition-all"
+              className="px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-2xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-emerald-600" />
               <span>Tải Báo Cáo Excel</span>
             </button>
+
+            {onResetAllData && (
+              <button
+                onClick={() => {
+                  if (confirm('CẢNH BÁO LÀM SẠCH: Bạn có chắc chắn muốn XÓA SẠCH toàn bộ kho hàng và lịch sử hóa đơn VAT khỏi CSDL SQLite?\n\nTất cả dữ liệu tồn kho & hóa đơn sẽ về 0 để hệ thống hoàn toàn trống sạch, cho phép bạn nạp lại bất kỳ file XML/PDF nào mà không bị báo trùng!')) {
+                    onResetAllData();
+                  }
+                }}
+                className="px-3 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white border border-rose-200 rounded-2xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                title="Reset toàn bộ kho và hóa đơn về 0"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Reset Sạch Dữ Liệu</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -328,10 +348,10 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
               </button>
               <button
                 onClick={() => setIsBulkDeleteModalOpen(true)}
-                className="px-3.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-xs transition-colors"
+                className="px-3.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Xóa các mục đã chọn</span>
+                <span>Xóa tất cả các mục đã chọn</span>
               </button>
             </div>
           </div>
@@ -380,10 +400,17 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                 </tr>
               ) : (
                 filteredInventory.map((item, idx) => {
+                  if (!item) return null;
+                  const currentStock = item.currentStock || 0;
+                  const minStockThreshold = item.minStockThreshold ?? 5;
+                  const totalInbound = item.totalInbound || 0;
+                  const totalOutbound = item.totalOutbound || 0;
+                  const averageCost = item.averageCost || 0;
+
                   const isSelected = selectedSkus.includes(item.sku);
-                  const isLow = item.currentStock <= item.minStockThreshold && item.currentStock > 0;
-                  const isEmpty = item.currentStock <= 0;
-                  const isSafe = item.currentStock > item.minStockThreshold;
+                  const isLow = currentStock <= minStockThreshold && currentStock > 0;
+                  const isEmpty = currentStock <= 0;
+                  const isSafe = currentStock > minStockThreshold;
 
                   let rowBgClass = 'hover:bg-slate-50/80';
                   if (isSelected) {
@@ -398,13 +425,13 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
 
                   // Smart Note generation
                   const smartNote = isEmpty
-                    ? `Đã xuất hết ${item.totalOutbound} ${item.unit} (Hết hàng!)`
+                    ? `Đã xuất hết ${totalOutbound} ${item.unit || ''} (Hết hàng!)`
                     : isLow
-                      ? `Đã xuất ${item.totalOutbound}, còn lại ${item.currentStock} (Dưới ngưỡng ${item.minStockThreshold})`
-                      : `Đã xuất ${item.totalOutbound}, còn lại ${item.currentStock} ${item.unit}`;
+                      ? `Đã xuất ${totalOutbound}, còn lại ${currentStock} (Dưới ngưỡng ${minStockThreshold})`
+                      : `Đã xuất ${totalOutbound}, còn lại ${currentStock} ${item.unit || ''}`;
 
                   return (
-                    <tr key={item.id} className={`transition-colors ${rowBgClass}`}>
+                    <tr key={item.id || item.sku || idx} className={`transition-colors ${rowBgClass}`}>
                       <td className="px-3 py-3 text-center">
                         <input
                           type="checkbox"
@@ -431,29 +458,29 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
 
                       {/* Inbound column */}
                       <td className="px-4 py-3 text-right font-semibold text-emerald-700 bg-emerald-50/30 border-x border-emerald-100/80 font-mono">
-                        +{item.totalInbound}
+                        +{totalInbound.toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
                       </td>
 
                       {/* Outbound column */}
                       <td className="px-4 py-3 text-right font-semibold text-rose-700 bg-rose-50/30 border-r border-rose-100/80 font-mono">
-                        -{item.totalOutbound}
+                        -{totalOutbound.toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
                       </td>
 
                       {/* Current stock column */}
                       <td className="px-4 py-3 text-right font-bold text-slate-900 text-sm font-mono">
-                        {item.currentStock}
+                        {currentStock.toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
                       </td>
 
                       <td className="px-4 py-3 text-center text-slate-500 font-mono">
-                        {item.minStockThreshold}
+                        {minStockThreshold}
                       </td>
 
                       <td className="px-4 py-3 text-right text-slate-700 font-mono whitespace-nowrap">
-                        {item.averageCost.toLocaleString('vi-VN')}
+                        {averageCost.toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
                       </td>
 
                       <td className="px-4 py-3 text-right font-semibold text-slate-900 font-mono whitespace-nowrap">
-                        {(item.currentStock * item.averageCost).toLocaleString('vi-VN')}
+                        {(currentStock * averageCost).toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
                       </td>
 
                       {/* Smart Note & Status Badge */}
