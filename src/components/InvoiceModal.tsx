@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Plus, Trash2, Upload, Check, ArrowDownLeft, ArrowUpRight, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { X, FileText, Trash2, Upload, Check, ArrowDownLeft, ArrowUpRight, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType } from '../types';
-import { parseInvoiceXml } from '../utils/xmlParser';
+import { generateSkuFromName, parseInvoiceXml } from '../utils/xmlParser';
 
 interface InvoiceModalProps {
   isOpen: boolean;
@@ -25,8 +25,10 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [partnerName, setPartnerName] = useState('');
   const [partnerTaxCode, setPartnerTaxCode] = useState('');
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerTaxCode, setBuyerTaxCode] = useState('');
   const [xmlFileName, setXmlFileName] = useState<string | null>(null);
-  const [xmlStatus, setXmlStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [xmlStatus, setXmlStatus] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -34,11 +36,13 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   // Function to completely reset form to empty / 0
   const resetForm = (newType: InvoiceType = defaultType) => {
     setType(newType);
-    setInvoiceNumber('000' + Math.floor(1000 + Math.random() * 9000));
+    setInvoiceNumber('');
     setSymbol('C26TBA');
     setDate(new Date().toISOString().slice(0, 10));
     setPartnerName('');
     setPartnerTaxCode('');
+    setBuyerName('');
+    setBuyerTaxCode('');
     setXmlFileName(null);
     setXmlStatus(null);
     setItems([
@@ -130,22 +134,30 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validItems = items.filter(it => it.sku.trim() !== '' || it.name.trim() !== '' || it.quantity > 0);
-    const finalItems = validItems.length > 0 ? validItems : items;
+    if (items.some((item) => !item.name.trim() || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+      setXmlStatus({ type: 'error', message: 'Hãy kiểm tra và nhập tên sản phẩm cùng số lượng cho từng dòng trước khi lưu.' });
+      return;
+    }
+    const finalItems = items.map((item, index) => ({
+      ...item,
+      sku: item.sku.trim() || generateSkuFromName(item.name, index),
+    }));
 
     const newInvoice: Invoice = {
       id: 'inv-' + Date.now(),
-      invoiceNumber: invoiceNumber || '000' + Math.floor(1000 + Math.random() * 9000),
+      invoiceNumber: invoiceNumber.trim(),
       symbol: symbol || 'C26TBA',
       date,
       type,
       partnerName: partnerName || (type === 'INBOUND' ? 'Nhà cung cấp VAT' : 'Khách hàng VAT'),
       partnerTaxCode,
+      buyerName,
+      buyerTaxCode,
       items: finalItems,
       totalBeforeTax,
       vatAmount: totalVat,
       totalWithTax,
-      source: xmlFileName ? 'XML' : 'MANUAL',
+      source: xmlFileName?.toLowerCase().endsWith('.pdf') ? 'PDF' : xmlFileName ? 'XML' : 'MANUAL',
       createdAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
     };
 
@@ -190,16 +202,34 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
           if (parsed.date) setDate(parsed.date);
           if (parsed.sellerName) setPartnerName(parsed.sellerName);
           if (parsed.sellerTaxCode) setPartnerTaxCode(parsed.sellerTaxCode);
-          if (parsed.items && parsed.items.length > 0) setItems(parsed.items);
+          if (parsed.buyerName) setBuyerName(parsed.buyerName);
+          if (parsed.buyerTaxCode) setBuyerTaxCode(parsed.buyerTaxCode);
+          if (parsed.items && parsed.items.length > 0) {
+            setItems(parsed.productNamesExtracted ? parsed.items : [{
+              id: `item-pdf-manual-${Date.now()}`,
+              sku: '',
+              name: '',
+              unit: 'Cái',
+              quantity: 0,
+              unitPrice: 0,
+              vatRate: 10,
+              totalAmount: 0,
+            }]);
+          }
 
-          setXmlStatus({
+          setXmlStatus(parsed.invoiceNumber && parsed.productNamesExtracted ? {
             type: 'success',
-            message: `Đã bóc tách thành công Hóa đơn PDF Số ${parsed.invoiceNumber} từ file ${file.name}.`
+            message: `Đã đọc số hóa đơn và tên mặt hàng từ file ${file.name}.`
+          } : {
+            type: 'warning',
+            message: !parsed.invoiceNumber
+              ? `Đã đọc nội dung PDF nhưng chưa nhận diện được số hóa đơn. Hãy nhập số thật và kiểm tra các trường trước khi lưu.`
+              : `Chưa trích xuất chính xác được dòng mặt hàng từ PDF này. Hãy nhập tên và kiểm tra mặt hàng trước khi lưu.`
           });
         } catch (err: any) {
           setXmlStatus({
-            type: 'error',
-            message: `Lỗi đọc file PDF: ${err.message || 'File PDF không có text layer hoặc không hợp lệ'}`
+            type: 'warning',
+            message: `Không thể tự bóc tách file PDF này. Nếu đây là PDF scan ảnh, phần mềm chưa nhận dạng chữ tự động; bạn vẫn có thể nhập số hóa đơn, nhà cung cấp và mặt hàng bằng tay. Chi tiết: ${err.message || 'PDF không có lớp chữ hoặc không hợp lệ'}`
           });
         }
       } else {
@@ -216,6 +246,8 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
               setPartnerName(parsed.sellerName);
             }
             if (parsed.sellerTaxCode) setPartnerTaxCode(parsed.sellerTaxCode);
+            if (parsed.buyerName) setBuyerName(parsed.buyerName);
+            if (parsed.buyerTaxCode) setBuyerTaxCode(parsed.buyerTaxCode);
 
             if (parsed.items && parsed.items.length > 0) {
               setItems(parsed.items);
@@ -331,11 +363,15 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
                     xmlStatus.type === 'success'
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                      : 'bg-rose-50 text-rose-800 border-rose-300'
+                      : xmlStatus.type === 'warning'
+                        ? 'bg-amber-50 text-amber-800 border-amber-300'
+                        : 'bg-rose-50 text-rose-800 border-rose-300'
                   }`}
                 >
                   {xmlStatus.type === 'success' ? (
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : xmlStatus.type === 'warning' ? (
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                   ) : (
                     <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
                   )}
@@ -450,7 +486,6 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                 onClick={handleAddItem}
                 className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg flex items-center gap-1"
               >
-                <Plus className="w-3 h-3" />
                 <span>Thêm Dòng</span>
               </button>
             </div>
@@ -606,4 +641,3 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
     </div>
   );
 };
-
