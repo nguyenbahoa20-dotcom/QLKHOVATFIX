@@ -16,9 +16,9 @@ REVIEW_REQUESTED
 - Tệp hoặc màn hình liên quan: `KhoiDongApp.vbs`, `chay_phan_mem.bat`, `start_servers.bat`, `package-lock.json`, `README.md`
 
 ## Kết quả thực hiện
-- Tóm tắt thay đổi: Thêm Node.js portable v24.21.0 vào gói Windows; VBS gọi cùng một launcher PowerShell có kiểm tra nhiều lần bấm, cài dependency bằng `npm ci` và xác minh SHA-256 nếu phải tải runtime; BAT dùng cùng luồng nhưng hiện lỗi trong cửa sổ; GitHub Actions có thể dựng ZIP portable từ repo.
-- Tệp đã sửa: `KhoiDongApp.ps1`, `KhoiDongApp.vbs`, `chay_phan_mem.bat`, `.gitignore`, `README.md`, `AI_HANDOFF.md`, `.github/workflows/package-windows.yml`; thêm `package-lock.json`.
-- Kiểm tra đã chạy và kết quả: Node portable chạy được; `npm run lint` thành công với các dependency đã có. GitHub Actions CI #19 thành công, gồm TypeScript và build qua bun.lock. `npm ci` cục bộ bị mạng npm ngắt giữa chừng; `npm run build` cục bộ bị sandbox chặn esbuild đọc thư mục cha. Workflow đóng gói Windows chưa được chạy thủ công. Chưa thử trên máy Windows sạch; không có test tự động trong package.json.
+- Tóm tắt thay đổi: Đồng bộ lại màn hình đăng nhập/tạo Admin và quản lý User; thêm bảng user và `invoice_items` nếu DB cũ thiếu; cải thiện nhận diện bên mua khi nhập hóa đơn, kiểm tra trùng và lỗi PDF/XML; bỏ số hóa đơn tự sinh. Thêm Node.js portable v24.21.0 vào gói Windows; VBS dùng launcher PowerShell, chờ server sẵn sàng và chỉ mở một cửa sổ trình duyệt; BAT hiện lỗi khởi động; GitHub Actions có workflow tạo ZIP portable.
+- Tệp đã sửa: `src/App.tsx`, `src/types.ts`, `src/db/sqliteServer.ts`, `src/utils/api.ts`, `src/utils/pdfParser.ts`, `src/utils/xmlParser.ts`, các màn hình công ty/kho/hóa đơn/Gmail, `src/components/AuthGate.tsx`, `src/components/UserManagementModal.tsx`, `src/vite-env.d.ts`, `KhoiDongApp.ps1`, `KhoiDongApp.vbs`, `chay_phan_mem.bat`, `.gitignore`, `README.md`, `AI_HANDOFF.md`, `.github/workflows/package-windows.yml`; thêm `package-lock.json`.
+- Kiểm tra đã chạy và kết quả: Node portable chạy được; `npm run lint` thành công với dependency đã có. GitHub Actions CI #36 thành công, gồm TypeScript và build qua bun.lock. `npm ci` cục bộ bị mạng npm ngắt giữa chừng; `npm run build` cục bộ bị sandbox chặn esbuild đọc thư mục cha. Gói ZIP portable đã tạo và kiểm tra không chứa DB, `.env` hoặc `node_modules`; workflow tạo ZIP trên GitHub chưa được chạy thủ công. Chưa thử VBS trên máy Windows sạch; không có test tự động trong package.json.
 
 ## Việc tiếp theo
 - Người/AI nhận việc: Người dùng xem thay đổi trên Pull Request rồi chấp nhận hoặc yêu cầu sửa.
