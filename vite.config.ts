@@ -5,7 +5,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base:'/QLKHOVATFIX/',
+    // Render serves this app from the domain root. Keep the base configurable
+    // for static previews that may be hosted under a subpath.
+    base: process.env.VITE_BASE_PATH || '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

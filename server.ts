@@ -1,6 +1,8 @@
 import express from 'express';
+import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
+import { timingSafeEqual } from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import {
@@ -25,6 +27,7 @@ import {
   addEmailLog,
   exportBackupJson,
   restoreBackupJson,
+  DB_FILE_PATH,
 } from './src/db/sqliteServer.js';
 import { Company, Invoice, EmailLog } from './src/types.js';
 
@@ -47,20 +50,63 @@ function getGenAI(): GoogleGenAI | null {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const adminUsername = process.env.ADMIN_USERNAME || '';
+  const adminPassword = process.env.ADMIN_PASSWORD || '';
 
-  app.use(express.json({ limit: '10mb' }));
+  app.set('trust proxy', 1);
+  app.get('/healthz', (_req, res) => res.status(200).send('ok'));
 
-  // CORS Middleware for full API accessibility
+  if (isProduction && (!adminUsername || adminPassword.length < 16)) {
+    throw new Error('Production requires ADMIN_USERNAME and an ADMIN_PASSWORD of at least 16 characters.');
+  }
+
+  // A single-user gate protects the app and every data-changing API in remote deployments.
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
+    if (!isProduction) return next();
+
+    const authorization = req.headers.authorization || '';
+    const encoded = authorization.startsWith('Basic ') ? authorization.slice(6) : '';
+    let providedUsername = '';
+    let providedPassword = '';
+    try {
+      const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+      const separator = decoded.indexOf(':');
+      if (separator >= 0) {
+        providedUsername = decoded.slice(0, separator);
+        providedPassword = decoded.slice(separator + 1);
+      }
+    } catch {
+      // Invalid credentials receive the same response as missing credentials.
     }
+
+    const usernameMatches = secretsMatch(providedUsername, adminUsername);
+    const passwordMatches = secretsMatch(providedPassword, adminPassword);
+
+    if (!usernameMatches || !passwordMatches) {
+      res.setHeader('WWW-Authenticate', 'Basic realm="QLKHOVATFIX", charset="UTF-8"');
+      return res.status(401).send('Vui lòng đăng nhập để sử dụng ứng dụng.');
+    }
+
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      const origin = req.get('origin');
+      const host = req.get('host');
+      if (!origin || !host) return res.status(403).send('Yêu cầu không hợp lệ.');
+      try {
+        const parsedOrigin = new URL(origin);
+        if (parsedOrigin.protocol !== 'https:' || parsedOrigin.host !== host) {
+          return res.status(403).send('Yêu cầu không cùng nguồn.');
+        }
+      } catch {
+        return res.status(403).send('Yêu cầu không hợp lệ.');
+      }
+    }
+
     next();
   });
+
+  app.use(express.json({ limit: '10mb' }));
 
   // Initialize SQLite database (vat_database.db)
   const db = await getDatabase();
@@ -439,7 +485,7 @@ ${message}`;
   // 4b. Backup & Restore CSDL Routes
   app.get('/api/backup/download', (req, res) => {
     try {
-      const dbPath = path.join(process.cwd(), 'vat_database.db');
+      const dbPath = DB_FILE_PATH;
       if (fs.existsSync(dbPath)) {
         res.download(dbPath, 'vat_database.db');
       } else {
@@ -572,6 +618,9 @@ ${message}`;
 
   // Shutdown API Endpoint
   app.post('/api/shutdown', (req, res) => {
+    if (isProduction) {
+      return res.status(404).json({ error: 'Không thể tắt máy chủ từ ứng dụng đã triển khai.' });
+    }
     res.json({ success: true, message: 'Phần mềm đã được đóng an toàn. Toàn bộ dữ liệu đã được lưu.' });
     setTimeout(() => {
       console.log('User requested application shutdown. Terminating process...');
@@ -597,6 +646,12 @@ ${message}`;
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
   });
+}
+
+function secretsMatch(provided: string, expected: string): boolean {
+  const providedBuffer = Buffer.from(provided, 'utf8');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  return providedBuffer.length === expectedBuffer.length && timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
 startServer();

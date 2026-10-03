@@ -1,0 +1,61 @@
+name: Package Windows portable app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - name: Check out application
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for validation
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+
+      - name: Install and validate application
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run lint
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Add verified portable Node.js runtime
+        shell: pwsh
+        run: |
+          $version = 'v24.21.0'
+          $folder = "node-$version-win-x64"
+          $zip = "$folder.zip"
+          $url = "https://nodejs.org/dist/$version/$zip"
+          $expected = '158F7685B44DE51F6C0DF1D153526CBCD3E1BC739A8DFC607721CEF75DE9E541'
+          Invoke-WebRequest $url -OutFile $zip
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash
+          if ($actual -ne $expected) { throw 'Node.js archive checksum did not match.' }
+          New-Item -ItemType Directory -Force -Path 'runtime' | Out-Null
+          Expand-Archive -Path $zip -DestinationPath 'runtime'
+          Remove-Item $zip -Force
+
+      - name: Assemble portable ZIP without local data or installed packages
+        shell: pwsh
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP 'TaxVaultPro'
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+          Get-ChildItem -Force | Where-Object { $_.Name -notin @('.git', 'node_modules', '.npm-cache', 'dist', 'build', 'coverage') -and $_.Name -notlike '*.log' -and $_.Name -notlike '.env*' } | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $package -Recurse -Force
+          }
+          Compress-Archive -Path $package -DestinationPath (Join-Path $env:RUNNER_TEMP 'QLKHOVATFIX-Windows-Portable.zip') -CompressionLevel Optimal
+
+      - name: Upload portable Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: QLKHOVATFIX-Windows-Portable
+          path: ${{ runner.temp }}/QLKHOVATFIX-Windows-Portable.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -17,6 +17,8 @@ import { CompanyManageModal } from './components/CompanyManageModal';
 import { DuplicateWarningModal, DuplicateInvoiceInfo } from './components/DuplicateWarningModal';
 import { UploadSummaryModal, UploadBatchSummary, FileProcessingResult } from './components/UploadSummaryModal';
 import { AIChat } from './components/AIChat';
+import { AuthGate } from './components/AuthGate';
+import { UserManagementModal } from './components/UserManagementModal';
 
 import {
   initialCompanies,
@@ -25,7 +27,7 @@ import {
   initialEmailLogs,
   initialGmailConfig,
 } from './data/initialData';
-import { Company, InventoryItem, Invoice, EmailLog, GmailConfig, InvoiceType } from './types';
+import { AppUser, Company, InventoryItem, Invoice, EmailLog, GmailConfig, InvoiceType } from './types';
 import { parseInvoiceXml, ParsedXmlInvoice } from './utils/xmlParser';
 import { parsePdfInvoice } from './utils/pdfParser';
 import { exportInventoryToExcel, exportHTKKVATToExcel } from './utils/excelExport';
@@ -53,10 +55,16 @@ import {
   apiShutdownApp,
   getLocalEmailLogsCache,
   getLocalGmailConfigCache,
+  fetchAuthStatus,
+  setupAdminAccount,
+  loginAccount,
+  logoutAccount,
 } from './utils/api';
-import { CheckCircle2, Building2, Sparkles, Plus, ArrowRight, AlertCircle, Loader2, X, Power } from 'lucide-react';
+import { CheckCircle2, Building2, Sparkles, ArrowRight, AlertCircle, Loader2, X, Power } from 'lucide-react';
 
 export default function App() {
+  const [auth, setAuth] = useState<{ loading: boolean; needsSetup: boolean; user: AppUser | null }>({ loading: true, needsSetup: false, user: null });
+  const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'gmail' | 'inventory' | 'history'>('inventory');
 
   // Multi-Company State
@@ -121,6 +129,27 @@ export default function App() {
 
   const [toastMessage, setToastMessage] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  useEffect(() => {
+    fetchAuthStatus()
+      .then((status) => setAuth({ loading: false, needsSetup: status.needsSetup, user: status.user }))
+      .catch(() => setAuth({ loading: false, needsSetup: true, user: null }));
+  }, []);
+
+  const handleAuthLogin = async (username: string, password: string) => {
+    const user = await loginAccount(username, password);
+    setAuth({ loading: false, needsSetup: false, user });
+  };
+
+  const handleAuthSetup = async (username: string, password: string) => {
+    const user = await setupAdminAccount(username, password);
+    setAuth({ loading: false, needsSetup: false, user });
+  };
+
+  const handleAuthLogout = async () => {
+    try { await logoutAccount(); } catch (err) { console.warn('Logout request failed:', err); }
+    setAuth({ loading: false, needsSetup: false, user: null });
+  };
+
   const showToast = (msg: any, type: 'success' | 'error' | 'info' = 'success') => {
     const textMsg = typeof msg === 'string'
       ? msg
@@ -136,6 +165,7 @@ export default function App() {
 
   // Load companies & data from SQLite Database when component mounts or company changes
   useEffect(() => {
+    if (auth.loading || !auth.user) return;
     async function loadSqliteData() {
       try {
         const [compData, invData, invDocData, configData, logData] = await Promise.all([
@@ -162,7 +192,7 @@ export default function App() {
       }
     }
     loadSqliteData();
-  }, [selectedCompanyId]);
+  }, [selectedCompanyId, auth.loading, auth.user?.id]);
 
   // Selected company object
   const currentCompany = companies.find((c) => c && c.id === selectedCompanyId) || companies[0] || initialCompanies[0];
@@ -367,15 +397,20 @@ export default function App() {
       setInventory(freshInventory.filter((i) => i && i.sku));
       showToast('Đã xóa sạch toàn bộ kho hàng và hóa đơn VAT trong CSDL SQLite! Kho hàng đã về 0.');
     } catch (err: any) {
-      showToast(`Lỗi làm sạch dữ liệu: ${err.message || err}`);
+        showToast(`Lỗi làm sạch dữ liệu: ${err.message || err}`, 'error');
     }
   };
 
   // Duplicate check helper function
   const checkIsDuplicate = (target: { invoiceNumber: string; symbol?: string; partnerTaxCode?: string; companyId?: string }) => {
     const targetCompId = target.companyId || selectedCompanyId;
-    const normNum = (target.invoiceNumber || '').trim().toLowerCase();
-    const normSym = (target.symbol || '').trim().toLowerCase();
+    const normalizeInvoiceNumber = (value: string) => {
+      const normalized = (value || '').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      return /^\d+$/.test(normalized) ? normalized.replace(/^0+(?=\d)/, '') : normalized;
+    };
+    const normalizeCode = (value: string) => (value || '').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const normNum = normalizeInvoiceNumber(target.invoiceNumber || '');
+    const normSym = normalizeCode(target.symbol || '');
     const normTax = (target.partnerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
     if (!normNum) return false;
@@ -384,8 +419,8 @@ export default function App() {
       if (!inv || !inv.invoiceNumber) return false;
       if (inv.companyId && targetCompId && inv.companyId !== targetCompId) return false;
 
-      const invNum = (inv.invoiceNumber || '').trim().toLowerCase();
-      const invSym = (inv.symbol || '').trim().toLowerCase();
+      const invNum = normalizeInvoiceNumber(inv.invoiceNumber || '');
+      const invSym = normalizeCode(inv.symbol || '');
       const invTax = (inv.partnerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
       const numMatch = invNum === normNum;
@@ -399,7 +434,7 @@ export default function App() {
   };
 
   // Save Invoice with duplicate prevention
-  const handleSaveInvoice = async (invoice: Invoice) => {
+  const handleSaveInvoice = async (invoice: Invoice): Promise<boolean> => {
     const invWithCompany = {
       ...invoice,
       companyId: invoice.companyId || selectedCompanyId,
@@ -415,13 +450,14 @@ export default function App() {
         companyName: currentCompany?.name,
       });
       setIsDuplicateModalOpen(true);
-      return;
+      return false;
     }
 
     try {
       await apiSaveInvoice(invWithCompany);
-      const freshInvoices = await fetchInvoices(selectedCompanyId);
-      const freshInventory = await fetchInventory(selectedCompanyId);
+      const companyId = invWithCompany.companyId;
+      const freshInvoices = await fetchInvoices(companyId);
+      const freshInventory = await fetchInventory(companyId);
 
       setInvoices(freshInvoices.filter((i) => i && i.id));
       setInventory(freshInventory);
@@ -431,6 +467,7 @@ export default function App() {
           invoice.type === 'INBOUND' ? 'Nhập kho' : 'Xuất kho'
         }) và tự động đồng bộ kho vào CSDL SQLite!`
       );
+      return true;
     } catch (err: any) {
       if (err.isDuplicate || (err.message && err.message.includes('đã tồn tại'))) {
         setPendingDuplicateInvoice(invWithCompany);
@@ -443,8 +480,9 @@ export default function App() {
         });
         setIsDuplicateModalOpen(true);
       } else {
-        showToast(`Lỗi lưu hóa đơn: ${err.message || 'Lỗi không xác định'}`);
+        showToast(`Lỗi lưu hóa đơn: ${err.message || 'Lỗi không xác định'}`, 'error');
       }
+      return false;
     }
   };
 
@@ -471,7 +509,7 @@ export default function App() {
 
       showToast(`Đã ghi đè thành công Hóa đơn VAT ${invNum} và cập nhật toàn bộ danh mục vào Kho VAT!`);
     } catch (err: any) {
-      showToast(`Lỗi ghi đè hóa đơn: ${err.message || 'Lỗi không xác định'}`);
+      showToast(`Lỗi ghi đè hóa đơn: ${err.message || 'Lỗi không xác định'}`, 'error');
     } finally {
       setPendingDuplicateInvoice(null);
     }
@@ -484,7 +522,7 @@ export default function App() {
       setInventory(resynced);
       showToast(`Đã tính toán & đồng bộ thành công ${resynced.length} mặt hàng trong Kho VAT từ Hóa đơn!`);
     } catch (err: any) {
-      showToast(`Lỗi đồng bộ kho: ${err.message || 'Lỗi không xác định'}`);
+      showToast(`Lỗi đồng bộ kho: ${err.message || 'Lỗi không xác định'}`, 'error');
     }
   };
 
@@ -547,16 +585,49 @@ export default function App() {
           parsed = await parsePdfInvoice(arrayBuffer);
         }
 
-        const cleanTaxCode = (parsed.sellerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '');
+        if (!parsed.invoiceNumber?.trim()) {
+          errorCount++;
+          results.push({
+            fileName,
+            fileType,
+            status: 'ERROR',
+            errorMessage: 'Không đọc được số hóa đơn. File này chưa được lưu; hãy nhập số hóa đơn thật hoặc dùng file XML để tránh ghi trùng.',
+          });
+          continue;
+        }
+        if (isPdf && !parsed.productNamesExtracted) {
+          errorCount++;
+          results.push({
+            fileName,
+            fileType,
+            status: 'ERROR',
+            errorMessage: 'Không trích xuất được chính xác tên mặt hàng từ PDF. File chưa được lưu để tránh ghi sai tên sản phẩm; hãy nhập riêng hóa đơn và kiểm tra mặt hàng.',
+          });
+          continue;
+        }
+
+        const cleanBuyerTaxCode = (parsed.buyerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '');
+        const cleanSupplierTaxCode = (parsed.sellerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '');
 
         // Find matching company or fallback to active company
         let targetComp = currentCompany;
+        const cleanBuyerName = (parsed.buyerName || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
         const matchedComp = companies.find((c) => {
           const cTax = c.taxCode.replace(/[^a-zA-Z0-9]/g, '');
-          return cTax && cleanTaxCode && cTax === cleanTaxCode;
+          const cName = c.name.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+          return (cleanBuyerTaxCode && cTax === cleanBuyerTaxCode) || (!cleanBuyerTaxCode && cleanBuyerName && cName === cleanBuyerName);
         });
         if (matchedComp) {
           targetComp = matchedComp;
+        } else if (cleanBuyerTaxCode || cleanBuyerName) {
+          errorCount++;
+          results.push({
+            fileName,
+            fileType,
+            status: 'ERROR',
+            errorMessage: `Chưa tìm thấy công ty bên mua ${parsed.buyerTaxCode || parsed.buyerName} trong danh sách. Hãy thêm công ty bên mua rồi nhập lại hóa đơn.`,
+          });
+          continue;
         }
 
         const targetCompanyId = targetComp?.id || selectedCompanyId;
@@ -564,7 +635,7 @@ export default function App() {
         // Check duplicate against current list
         const normNum = (parsed.invoiceNumber || '').trim().toLowerCase();
         const normSym = (parsed.symbol || '').trim().toLowerCase();
-        const normTax = cleanTaxCode.toLowerCase();
+        const normTax = cleanSupplierTaxCode.toLowerCase();
 
         const isDup = currentInvoicesList.some((inv) => {
           if (!inv || !inv.invoiceNumber) return false;
@@ -605,6 +676,8 @@ export default function App() {
           type: 'INBOUND',
           partnerName: parsed.sellerName || 'Đơn vị bán VAT',
           partnerTaxCode: parsed.sellerTaxCode || '',
+          buyerName: parsed.buyerName,
+          buyerTaxCode: parsed.buyerTaxCode,
           items: parsed.items,
           totalBeforeTax: parsed.totalBeforeTax,
           vatAmount: parsed.vatAmount,
@@ -658,28 +731,37 @@ export default function App() {
 
   // Automatic XML Tax Code Classification
   const handleImportXmlInvoiceAutoClassify = async (invoice: Invoice) => {
-    const cleanTaxCode = (invoice.partnerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '');
+    const companyName = invoice.type === 'INBOUND'
+      ? invoice.buyerName || ''
+      : invoice.partnerName || '';
+    const companyTaxCode = invoice.type === 'INBOUND'
+      ? invoice.buyerTaxCode || ''
+      : invoice.partnerTaxCode || '';
+    const cleanTaxCode = companyTaxCode.replace(/[^a-zA-Z0-9]/g, '');
 
     // Check if tax code matches any existing company
+    const cleanBuyerName = companyName.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
     const matchedComp = companies.find((c) => {
       const cTax = c.taxCode.replace(/[^a-zA-Z0-9]/g, '');
-      return cTax && (cTax === cleanTaxCode || c.taxCode === invoice.partnerTaxCode);
+      const cName = c.name.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+      return (cleanTaxCode && cTax === cleanTaxCode) || (!cleanTaxCode && cleanBuyerName && cName === cleanBuyerName);
     });
 
     if (matchedComp) {
       // Automatic match found! Auto-load into that company
       const invWithComp = { ...invoice, companyId: matchedComp.id };
-      await handleSaveInvoice(invWithComp);
+      const wasSaved = await handleSaveInvoice(invWithComp);
+      if (!wasSaved) return;
       setSelectedCompanyId(matchedComp.id);
       showToast(
         `Tự động phân loại Hóa đơn VAT ${invoice.invoiceNumber} vào Công ty "${matchedComp.name}" (MST: ${matchedComp.taxCode})!`
       );
-    } else if (cleanTaxCode) {
+    } else if (cleanTaxCode || cleanBuyerName) {
       // Unmatched tax code -> Show suggestion modal to create new company quickly
       setPendingXmlInvoice({
         invoice,
-        targetTaxCode: invoice.partnerTaxCode || '',
-        targetName: invoice.partnerName || 'Công ty từ Hóa Đơn VAT',
+        targetTaxCode: companyTaxCode,
+        targetName: companyName || 'Công ty bên mua từ hóa đơn VAT',
       });
       setShowXmlDetectModal(true);
     } else {
@@ -757,6 +839,16 @@ export default function App() {
     }
   };
 
+  if (auth.loading) {
+    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white text-sm">Đang kiểm tra đăng nhập…</div>;
+  }
+
+  if (!auth.user) {
+    return <AuthGate needsSetup={auth.needsSetup} onLogin={handleAuthLogin} onSetup={handleAuthSetup} />;
+  }
+
+  const isAdmin = auth.user.role === 'admin';
+
   if (isAppShutdown) {
     return (
       <div className="fixed inset-0 bg-slate-950 text-white z-[99999] flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300">
@@ -780,6 +872,10 @@ export default function App() {
     <div className="min-h-screen bg-slate-100/60 text-slate-900 font-sans flex flex-col antialiased selection:bg-blue-100 selection:text-blue-900 pb-12">
       {/* Top Floating Sticky Header */}
       <Navbar
+        user={auth.user}
+        isAdmin={isAdmin}
+        onLogout={handleAuthLogout}
+        onManageUsers={() => setIsUsersModalOpen(true)}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         inventory={companyInventory}
@@ -798,8 +894,8 @@ export default function App() {
         onRestoreBackupFile={handleRestoreBackupFile}
         isScanning={isScanning}
         onScanGmail={handleScanGmail}
-        onResetAllData={handleResetAllData}
-        onShutdownApp={handleShutdownApp}
+        onResetAllData={isAdmin ? handleResetAllData : undefined}
+        onShutdownApp={isAdmin ? handleShutdownApp : undefined}
       />
 
       {/* Main Bento Grid Content Body */}
@@ -819,6 +915,7 @@ export default function App() {
 
         {activeTab === 'inventory' && (
           <InventoryTab
+            canManageData={isAdmin}
             inventory={companyInventory}
             onOpenAddModal={() => {
               setEditingItem(null);
@@ -839,37 +936,39 @@ export default function App() {
             onDeleteItem={handleDeleteItem}
             onDeleteMultipleItems={handleDeleteMultipleItems}
             onExportExcel={handleExportExcel}
-            onResetAllData={handleResetAllData}
+            onResetAllData={isAdmin ? handleResetAllData : undefined}
             onResyncInventory={handleResyncInventory}
           />
         )}
 
         {activeTab === 'history' && (
           <HistoryTab 
-            invoices={companyInvoices} 
+            invoices={companyInvoices}
             onExportExcel={handleExportExcel}
-            onDeleteInvoice={handleDeleteInvoice}
-            onClearAllInvoices={handleClearAllInvoices}
+            onDeleteInvoice={isAdmin ? handleDeleteInvoice : undefined}
+            onClearAllInvoices={isAdmin ? handleClearAllInvoices : undefined}
           />
         )}
       </main>
 
-      {/* Bento Styled Footer */}
-      <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full mt-6">
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-5 text-center text-xs text-slate-500 shadow-xs">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p>© 2026 TaxVault Pro - Quản Lý Kho VAT Đa Công Ty (Multi-Company SQLite vat_database.db).</p>
-            <button
-              onClick={() => setIsPythonModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-colors shadow-xs cursor-pointer shrink-0"
-              title="Xem mã nguồn Python FastAPI & File runner .bat"
-            >
-              <FileCode className="w-4 h-4 text-blue-400" />
-              <span>Python Code (FastAPI & SQLite .bat)</span>
-            </button>
+      {/* Keep technical app details out of the everyday User view. */}
+      {isAdmin && (
+        <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full mt-6">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 text-center text-xs text-slate-500 shadow-xs">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <p>© 2026 TaxVault Pro - Quản Lý Kho VAT Đa Công Ty (Multi-Company SQLite vat_database.db).</p>
+              <button
+                onClick={() => setIsPythonModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-colors shadow-xs cursor-pointer shrink-0"
+                title="Xem mã nguồn Python FastAPI & File runner .bat"
+              >
+                <FileCode className="w-4 h-4 text-blue-400" />
+                <span>Python Code (FastAPI & SQLite .bat)</span>
+              </button>
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* Company Modal */}
       <CompanyModal
@@ -882,6 +981,7 @@ export default function App() {
 
       {/* Company Management List/Edit/Delete Modal */}
       <CompanyManageModal
+        canDeleteCompany={isAdmin}
         isOpen={isManageCompanyModalOpen}
         companies={companies}
         selectedCompanyId={selectedCompanyId}
@@ -904,20 +1004,20 @@ export default function App() {
             <div className="flex items-center gap-3 text-amber-600 mb-3">
               <Building2 className="w-6 h-6 text-emerald-600 shrink-0" />
               <h3 className="text-base font-extrabold text-slate-900">
-                Phát Hiện Mã Số Thuế Mới Trên Hóa Đơn XML
+                Phát Hiện Công Ty Bên Mua Mới
               </h3>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              Hệ thống đọc thấy Mã Số Thuế <b className="font-mono text-emerald-700">{pendingXmlInvoice.targetTaxCode}</b> (<span className="font-semibold">{pendingXmlInvoice.targetName}</span>) chưa có trong danh mục Công Ty của hệ thống.
+                Công ty bên mua <span className="font-semibold">{pendingXmlInvoice.targetName}</span> chưa có trong danh sách công ty. Hãy kiểm tra thông tin và thêm công ty nếu đây là đơn vị mới.
             </p>
 
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-5 text-xs text-emerald-900 space-y-1">
               <div className="font-bold flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-emerald-600" />
-                <span>Gợi ý tạo nhanh công ty mới theo MST:</span>
+                <span>Thông tin bên mua trên hóa đơn:</span>
               </div>
-              <div className="font-mono text-[11px]">MST: {pendingXmlInvoice.targetTaxCode}</div>
+              <div className="font-mono text-[11px]">MST: {pendingXmlInvoice.targetTaxCode || 'Chưa đọc được; nhập khi tạo công ty'}</div>
               <div className="font-medium text-[11px]">Tên: {pendingXmlInvoice.targetName}</div>
             </div>
 
@@ -947,8 +1047,7 @@ export default function App() {
                 }}
                 className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ Tạo Nhanh Công Ty Mới</span>
+                <span>Tạo Nhanh Công Ty Mới</span>
               </button>
             </div>
           </div>
@@ -1034,6 +1133,8 @@ export default function App() {
         summary={batchSummary}
       />
 
+      <UserManagementModal isOpen={isUsersModalOpen && isAdmin} currentUserId={auth.user.id} onClose={() => setIsUsersModalOpen(false)} />
+
       {/* High-Priority Toast Notification Overlay (z-[9999]) */}
       {toastMessage && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-[9999] pointer-events-auto max-w-md w-full px-4 animate-in fade-in slide-in-from-bottom-5 duration-300">
@@ -1077,4 +1178,3 @@ export default function App() {
     </div>
   );
 }
-
