@@ -9,10 +9,20 @@ export interface ParsedXmlInvoice {
   sellerTaxCode: string;
   buyerName: string;
   buyerTaxCode: string;
+  productNamesExtracted?: boolean;
   items: InvoiceItem[];
   totalBeforeTax: number;
   vatAmount: number;
   totalWithTax: number;
+}
+
+/** Remove a role label accidentally included in a party name, such as "(Seller): ACME". */
+export function cleanInvoicePartyName(value: string): string {
+  return (value || '')
+    .normalize('NFKC')
+    .replace(/^\s*\(?\s*(?:seller|buyer)\s*\)?\s*:\s*/i, '')
+    .replace(/^\s*(?:tên\s*đơn\s*vị(?:\s*\([^)]*\))?|company(?:'s\s*name)?|seller(?:'s\s*name)?|buyer(?:'s\s*name)?)\s*:\s*/i, '')
+    .trim();
 }
 
 /**
@@ -140,7 +150,10 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
   ]);
   if (!invoiceNumber) {
     const match = xmlContent.match(/<(?:[a-zA-Z0-9_-]+:)?(?:SHDon|InvoiceNumber|SoHoaDon|SoHD|InvoiceNo|InvNo)>([^<]+)<\//i);
-    invoiceNumber = match ? match[1].trim() : String(Math.floor(1000000 + Math.random() * 9000000));
+    invoiceNumber = match ? match[1].trim() : '';
+  }
+  if (!invoiceNumber) {
+    throw new Error('Không tìm thấy số hóa đơn trong file XML. Không thể lưu hóa đơn để tránh phát sinh tồn kho trùng.');
   }
 
   // 2. Extract Symbol / Serial
@@ -210,6 +223,8 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
   if (!buyerTaxCode) {
     buyerTaxCode = getTagTextUniversal(xmlDoc, ['MSTNMua', 'BuyerTaxCode', 'CustomerTaxCode']);
   }
+  sellerName = cleanInvoicePartyName(sellerName);
+  buyerName = cleanInvoicePartyName(buyerName);
 
   // 7. Extract Line Items
   const items: InvoiceItem[] = [];
