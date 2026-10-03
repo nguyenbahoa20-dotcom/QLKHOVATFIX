@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-import { ShieldCheck, Package, Mail, RefreshCw, Download, Database, Upload, FileSpreadsheet, Trash2, Power } from 'lucide-react';
-import { Company, InventoryItem } from '../types';
+import { ShieldCheck, Package, Mail, RefreshCw, Download, Database, Upload, FileSpreadsheet, Trash2, Power, Users, LogOut } from 'lucide-react';
+import { AppUser, Company, InventoryItem } from '../types';
 import { CompanySwitcher } from './CompanySwitcher';
 
 interface NavbarProps {
@@ -20,6 +20,10 @@ interface NavbarProps {
   onScanGmail: () => void;
   onResetAllData?: () => void;
   onShutdownApp?: () => void;
+  user: AppUser;
+  onLogout: () => void;
+  onManageUsers: () => void;
+  isAdmin: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -39,6 +43,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onScanGmail,
   onResetAllData,
   onShutdownApp,
+  user,
+  onLogout,
+  onManageUsers,
+  isAdmin,
 }) => {
   const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -159,6 +167,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right actions */}
           <div className="flex items-center gap-2 flex-wrap justify-end w-full lg:w-auto">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-bold text-slate-700">
+              <span>{user.username}</span><span className={`px-1.5 py-0.5 rounded-full ${isAdmin ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>{isAdmin ? 'Admin' : 'User'}</span>
+            </span>
+            {isAdmin && <button onClick={onManageUsers} className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-violet-50 border border-violet-200 text-violet-800 text-xs font-bold hover:bg-violet-100"><Users className="w-3.5 h-3.5" /><span>Tài khoản</span></button>}
+            <button onClick={onLogout} className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200" title="Đăng xuất"><LogOut className="w-3.5 h-3.5" /><span>Đăng xuất</span></button>
             <button
               onClick={onScanGmail}
               disabled={isScanning}
@@ -189,14 +202,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {/* Phục hồi CSDL */}
-            <button
+            {isAdmin && <button
               onClick={() => restoreFileInputRef.current?.click()}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-colors cursor-pointer"
               title="Chọn file .db hoặc .json để khôi phục dữ liệu"
             >
               <Upload className="w-3.5 h-3.5 text-purple-600" />
               <span className="hidden xl:inline">Phục Hồi</span>
-            </button>
+            </button>}
 
             {/* Thoát Ứng Dụng (Shutdown Server) */}
             {onShutdownApp && !(import.meta as any).env?.PROD && (
