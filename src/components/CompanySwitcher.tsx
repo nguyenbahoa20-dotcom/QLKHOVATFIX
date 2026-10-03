@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Building2, ChevronDown, Plus, Check, Settings } from 'lucide-react';
+import { Building2, ChevronDown, Check, Settings } from 'lucide-react';
 import { Company } from '../types';
 
 interface CompanySwitcherProps {
@@ -102,8 +102,7 @@ export const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
               }}
               className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ Thêm Công Ty</span>
+              <span>Thêm Công Ty</span>
             </button>
 
             <button
