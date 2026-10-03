@@ -1,4 +1,4 @@
-param([switch]$ShowConsole, [switch]$FromVbs)
+﻿param([switch]$ShowConsole, [switch]$FromVbs)
 
 $ErrorActionPreference = 'Stop'
 $appRoot = $PSScriptRoot
