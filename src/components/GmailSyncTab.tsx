@@ -78,6 +78,8 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
             type: 'INBOUND',
             partnerName: parsed.sellerName || 'Công ty Cổ phần Công Nghệ Á Châu',
             partnerTaxCode: parsed.sellerTaxCode || '0109887766',
+            buyerName: parsed.buyerName,
+            buyerTaxCode: parsed.buyerTaxCode,
             items: parsed.items,
             totalBeforeTax: parsed.totalBeforeTax,
             vatAmount: parsed.vatAmount,
@@ -195,7 +197,7 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
                 Kéo & Thả Tập File XML / PDF Hóa Đơn Vào Đây (Hoặc Chọn Thư Mục/Nhiều File)
               </p>
               <p className="text-xs text-slate-400 mt-1">
-                Tự động bóc tách & chống nhập trùng dựa trên (Số HĐ + Ký hiệu + MST Người bán). Hệ thống tự tổng kết sau khi nạp!
+                Tự động bóc tách và chống nhập trùng dựa trên số hóa đơn, ký hiệu và mã số thuế người bán. Hệ thống tự tổng kết sau khi nạp.
               </p>
             </div>
           </div>
@@ -459,7 +461,7 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
                     )}
                   </td>
                   <td className="px-4 py-3 text-center font-semibold text-slate-800">
-                    {log.parsedItemCount ? `+${log.parsedItemCount} SP` : '-'}
+                    {log.parsedItemCount ? `${log.parsedItemCount} SP` : '-'}
                   </td>
                 </tr>
               ))}
