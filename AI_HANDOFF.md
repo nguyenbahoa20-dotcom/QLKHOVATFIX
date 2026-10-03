@@ -18,11 +18,11 @@ REVIEW_REQUESTED
 ## Kết quả thực hiện
 - Tóm tắt thay đổi: Thêm Node.js portable v24.21.0 vào gói Windows; VBS gọi cùng một launcher PowerShell có kiểm tra nhiều lần bấm, cài dependency bằng `npm ci` và xác minh SHA-256 nếu phải tải runtime; BAT dùng cùng luồng nhưng hiện lỗi trong cửa sổ; GitHub Actions có thể dựng ZIP portable từ repo.
 - Tệp đã sửa: `KhoiDongApp.ps1`, `KhoiDongApp.vbs`, `chay_phan_mem.bat`, `.gitignore`, `README.md`, `AI_HANDOFF.md`, `.github/workflows/package-windows.yml`; thêm `package-lock.json`.
-- Kiểm tra đã chạy và kết quả: Node portable chạy được; `npm run lint` thành công với các dependency đã có. `npm ci` mới bị mạng npm ngắt giữa chừng trong môi trường này. `npm run build` không hoàn tất vì sandbox chặn esbuild đọc thư mục cha; GitHub Actions cần xác nhận build. Chưa thử trên một máy Windows sạch; không có test tự động trong package.json.
+- Kiểm tra đã chạy và kết quả: Node portable chạy được; `npm run lint` thành công với các dependency đã có. GitHub Actions CI #19 thành công, gồm TypeScript và build qua bun.lock. `npm ci` cục bộ bị mạng npm ngắt giữa chừng; `npm run build` cục bộ bị sandbox chặn esbuild đọc thư mục cha. Workflow đóng gói Windows chưa được chạy thủ công. Chưa thử trên máy Windows sạch; không có test tự động trong package.json.
 
 ## Việc tiếp theo
 - Người/AI nhận việc: Người dùng xem thay đổi trên Pull Request rồi chấp nhận hoặc yêu cầu sửa.
-- Câu hỏi còn mở: Cần kiểm tra GitHub Actions và chạy thử VBS trên máy Windows sạch. AI Studio chưa được đồng bộ qua giao diện của nó trong phiên này.
+- Câu hỏi còn mở: Chạy thử workflow tạo ZIP và VBS trên máy Windows sạch. AI Studio chưa được đồng bộ qua giao diện của nó trong phiên này.
 
 ## Quy ước cập nhật
 - Khi bắt đầu, chuyển trạng thái sang `IN_PROGRESS` và điền yêu cầu cụ thể.
