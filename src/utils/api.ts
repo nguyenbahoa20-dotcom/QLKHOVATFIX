@@ -252,6 +252,43 @@ export async function apiSaveInventoryItem(item: InventoryItem): Promise<Invento
   return fetchInventory(item.companyId);
 }
 
+export async function apiImportInventoryFromExcel(items: InventoryItem[]): Promise<InventoryItem[]> {
+  const res = await fetchWithFallback(`${API_BASE_URL}/api/inventory/import-excel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || errData.error || `Lỗi nhập Excel vào kho (HTTP ${res.status})`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.inventory) ? data.inventory : fetchInventory(items[0]?.companyId);
+  }
+
+  // Compatibility with an already-running server that predates the bulk-import route.
+  // The legacy single-item endpoint is already present and performs an SKU upsert.
+  const batchSize = 12;
+  for (let index = 0; index < items.length; index += batchSize) {
+    const batch = items.slice(index, index + batchSize);
+    await Promise.all(batch.map(async (item) => {
+      const fallbackRes = await fetchWithFallback(`${API_BASE_URL}/api/inventory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      verifyJsonResponse(fallbackRes);
+      if (!fallbackRes.ok) {
+        const errData = await fallbackRes.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.error || `Không lưu được mặt hàng ${item.sku} (HTTP ${fallbackRes.status})`);
+      }
+    }));
+  }
+  return fetchInventory(items[0]?.companyId);
+}
+
 export async function apiDeleteInventoryItem(sku: string, companyId?: string): Promise<InventoryItem[]> {
   const res = await fetchWithFallback(`${API_BASE_URL}/api/inventory/${encodeURIComponent(sku)}`, {
     method: 'DELETE',

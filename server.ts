@@ -2,7 +2,7 @@ import express from 'express';
 import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
-import { timingSafeEqual } from 'crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import {
@@ -12,6 +12,7 @@ import {
   deleteCompany,
   getAllInventory,
   saveOrUpdateInventoryItem,
+  bulkSaveOrUpdateInventoryItems,
   deleteInventoryItemBySku,
   deleteMultipleInventoryItems,
   resyncInventoryFromInvoices,
@@ -28,8 +29,75 @@ import {
   exportBackupJson,
   restoreBackupJson,
   DB_FILE_PATH,
+  saveDatabase,
 } from './src/db/sqliteServer.js';
-import { Company, Invoice, EmailLog } from './src/types.js';
+import { Company, InventoryItem, Invoice, EmailLog } from './src/types.js';
+
+type AppRole = 'admin' | 'user';
+type AppUser = { id: string; username: string; role: AppRole; createdAt: string };
+const authSessions = new Map<string, { userId: string; expiresAt: number }>();
+const authCookieName = 'taxvault_session';
+
+function getUserByUsername(db: any, username: string): any | null {
+  const stmt = db.prepare('SELECT id, username, passwordHash, passwordSalt, role, createdAt FROM app_users WHERE username = ? COLLATE NOCASE');
+  stmt.bind([username]);
+  const user = stmt.step() ? stmt.getAsObject() : null;
+  stmt.free();
+  return user;
+}
+
+function getUserById(db: any, id: string): AppUser | null {
+  const stmt = db.prepare('SELECT id, username, role, createdAt FROM app_users WHERE id = ?');
+  stmt.bind([id]);
+  const row = stmt.step() ? stmt.getAsObject() as Record<string, any> : null;
+  stmt.free();
+  return row ? { id: String(row.id), username: String(row.username), role: row.role as AppRole, createdAt: String(row.createdAt) } : null;
+}
+
+function getPublicUsers(db: any): AppUser[] {
+  const result = db.exec('SELECT id, username, role, createdAt FROM app_users ORDER BY createdAt ASC');
+  if (!result.length) return [];
+  return result[0].values.map((row: any[]) => ({
+    id: String(row[0]), username: String(row[1]), role: row[2] as AppRole, createdAt: String(row[3]),
+  }));
+}
+
+function countAppUsers(db: any): number {
+  const result = db.exec('SELECT COUNT(*) FROM app_users');
+  return Number(result?.[0]?.values?.[0]?.[0] || 0);
+}
+
+function getRequestCookie(req: express.Request, name: string): string {
+  const cookies = (req.headers.cookie || '').split(';');
+  const entry = cookies.map((value) => value.trim()).find((value) => value.startsWith(`${name}=`));
+  if (!entry) return '';
+  try { return decodeURIComponent(entry.slice(name.length + 1)); } catch { return ''; }
+}
+
+function issueSession(res: express.Response, user: AppUser) {
+  const token = randomBytes(32).toString('hex');
+  authSessions.set(token, { userId: user.id, expiresAt: Date.now() + 12 * 60 * 60 * 1000 });
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${authCookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${secure}`);
+}
+
+function getSessionUser(req: express.Request, db: any): AppUser | null {
+  const token = getRequestCookie(req, authCookieName);
+  const session = authSessions.get(token);
+  if (!token || !session) return null;
+  if (session.expiresAt <= Date.now()) {
+    authSessions.delete(token);
+    return null;
+  }
+  return getUserById(db, session.userId);
+}
+
+const requireAdmin: express.RequestHandler = (_req, res, next) => {
+  if (res.locals.authUser?.role !== 'admin') {
+    return res.status(403).json({ error: 'Chỉ tài khoản Admin được phép thực hiện thao tác này.' });
+  }
+  next();
+};
 
 let aiClient: GoogleGenAI | null = null;
 function getGenAI(): GoogleGenAI | null {
@@ -112,6 +180,99 @@ async function startServer() {
   const db = await getDatabase();
   console.log('SQLite Database (vat_database.db) initialized successfully.');
 
+  // First-run setup and sign-in routes stay public; all other API routes require a session.
+  app.get('/api/auth/status', (req, res) => {
+    res.json({ needsSetup: countAppUsers(db) === 0, user: getSessionUser(req, db) });
+  });
+
+  app.post('/api/auth/setup', (req, res) => {
+    if (countAppUsers(db) > 0) return res.status(409).json({ error: 'Tài khoản Admin đã được tạo.' });
+    const username = String(req.body?.username || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+      return res.status(400).json({ error: 'Tên đăng nhập cần từ 3 đến 32 ký tự, gồm chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.' });
+    }
+    if (password.length < 8) return res.status(400).json({ error: 'Mật khẩu cần có ít nhất 8 ký tự.' });
+    const salt = randomBytes(16).toString('hex');
+    const user: AppUser = { id: `user-${randomBytes(12).toString('hex')}`, username, role: 'admin', createdAt: new Date().toISOString() };
+    try {
+      db.run('INSERT INTO app_users (id, username, passwordHash, passwordSalt, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)', [
+        user.id, user.username, scryptSync(password, salt, 64).toString('hex'), salt, user.role, user.createdAt,
+      ]);
+      saveDatabase(db);
+      issueSession(res, user);
+      res.status(201).json({ user });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Không thể tạo tài khoản Admin.' });
+    }
+  });
+
+  app.post('/api/auth/login', (req, res) => {
+    const username = String(req.body?.username || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    const stored = getUserByUsername(db, username);
+    if (!stored) return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu chưa đúng.' });
+    const expected = Buffer.from(String(stored.passwordHash), 'hex');
+    const actual = scryptSync(password, String(stored.passwordSalt), 64);
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu chưa đúng.' });
+    }
+    const user = getUserById(db, String(stored.id))!;
+    issueSession(res, user);
+    res.json({ user });
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    const token = getRequestCookie(req, authCookieName);
+    if (token) authSessions.delete(token);
+    res.setHeader('Set-Cookie', `${authCookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
+    res.json({ success: true });
+  });
+
+  app.use('/api', (req, res, next) => {
+    if (['/auth/status', '/auth/setup', '/auth/login', '/auth/logout'].includes(req.path)) return next();
+    const user = getSessionUser(req, db);
+    if (!user) return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' });
+    res.locals.authUser = user;
+    next();
+  });
+
+  app.get('/api/auth/users', requireAdmin, (_req, res) => res.json(getPublicUsers(db)));
+  app.post('/api/auth/users', requireAdmin, (req, res) => {
+    const username = String(req.body?.username || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+      return res.status(400).json({ error: 'Tên đăng nhập cần từ 3 đến 32 ký tự, gồm chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.' });
+    }
+    if (password.length < 8) return res.status(400).json({ error: 'Mật khẩu cần có ít nhất 8 ký tự.' });
+    const salt = randomBytes(16).toString('hex');
+    const role: AppRole = req.body?.role === 'admin' ? 'admin' : 'user';
+    const user: AppUser = { id: `user-${randomBytes(12).toString('hex')}`, username, role, createdAt: new Date().toISOString() };
+    try {
+      db.run('INSERT INTO app_users (id, username, passwordHash, passwordSalt, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)', [
+        user.id, user.username, scryptSync(password, salt, 64).toString('hex'), salt, user.role, user.createdAt,
+      ]);
+      saveDatabase(db);
+      res.status(201).json({ user, users: getPublicUsers(db) });
+    } catch (err: any) {
+      const duplicate = String(err.message || '').toLowerCase().includes('unique');
+      res.status(duplicate ? 409 : 500).json({ error: duplicate ? 'Tên đăng nhập này đã được sử dụng.' : 'Không thể tạo tài khoản User.' });
+    }
+  });
+  app.delete('/api/auth/users/:id', requireAdmin, (req, res) => {
+    const target = getUserById(db, req.params.id);
+    if (!target) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    if (target.role === 'admin') {
+      if (target.id === res.locals.authUser.id) return res.status(400).json({ error: 'Không thể tự xóa tài khoản đang đăng nhập.' });
+      const adminCount = Number(db.exec("SELECT COUNT(*) FROM app_users WHERE role = 'admin'")?.[0]?.values?.[0]?.[0] || 0);
+      if (adminCount <= 1) return res.status(400).json({ error: 'Cần giữ lại ít nhất một tài khoản Admin.' });
+    }
+    db.run('DELETE FROM app_users WHERE id = ?', [target.id]);
+    for (const [token, session] of authSessions) if (session.userId === target.id) authSessions.delete(token);
+    saveDatabase(db);
+    res.json({ success: true, users: getPublicUsers(db) });
+  });
+
   // ==========================================
   // API ROUTES
   // ==========================================
@@ -136,7 +297,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/companies/:id', (req, res) => {
+  app.delete('/api/companies/:id', requireAdmin, (req, res) => {
     try {
       const { id } = req.params;
       const updated = deleteCompany(db, id);
@@ -162,7 +323,7 @@ async function startServer() {
   app.post('/api/resync-inventory', handleResync);
   app.get('/api/resync-inventory', handleResync);
 
-  app.post('/api/inventory/bulk-delete', (req, res) => {
+  app.post('/api/inventory/bulk-delete', requireAdmin, (req, res) => {
     try {
       const { skus, companyId } = req.body;
       deleteMultipleInventoryItems(db, skus, companyId);
@@ -170,6 +331,30 @@ async function startServer() {
       res.json({ success: true, count: skus.length, inventory: updated });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/inventory/import-excel', requireAdmin, (req, res) => {
+    try {
+      const { items } = req.body as { items?: unknown };
+      if (!Array.isArray(items) || items.length === 0 || items.length > 5000) {
+        return res.status(400).json({ error: 'Danh sách nhập Excel không hợp lệ (tối đa 5.000 mặt hàng).' });
+      }
+      const validItems = items.every((item: any) =>
+        item && typeof item.sku === 'string' && item.sku.trim() &&
+        typeof item.name === 'string' && item.name.trim() &&
+        typeof item.unit === 'string' && item.unit.trim() &&
+        typeof item.companyId === 'string' && item.companyId.trim() &&
+        ['totalInbound', 'totalOutbound', 'currentStock', 'minStockThreshold', 'averageCost'].every((key) => Number.isFinite(Number(item[key])))
+      );
+      if (!validItems) return res.status(400).json({ error: 'Một hoặc nhiều dòng thiếu mã/tên/đơn vị tính hoặc có số liệu không hợp lệ.' });
+      const companyIds = new Set((items as any[]).map((item) => item.companyId));
+      if (companyIds.size !== 1) return res.status(400).json({ error: 'Một lần nhập chỉ được áp dụng cho một công ty.' });
+      bulkSaveOrUpdateInventoryItems(db, items as InventoryItem[]);
+      const companyId = String((items[0] as any).companyId);
+      res.json({ success: true, imported: items.length, inventory: getAllInventory(db, companyId) });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Không thể lưu dữ liệu Excel.' });
     }
   });
 
@@ -194,7 +379,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/inventory/:sku', (req, res) => {
+  app.delete('/api/inventory/:sku', requireAdmin, (req, res) => {
     try {
       const { sku } = req.params;
       const companyId = req.query.companyId as string | undefined;
@@ -230,7 +415,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/invoices/:id', (req, res) => {
+  app.delete('/api/invoices/:id', requireAdmin, (req, res) => {
     try {
       const { id } = req.params;
       const companyId = (req.query.company_id || req.query.companyId) as string | undefined;
@@ -241,7 +426,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/invoices', (req, res) => {
+  app.delete('/api/invoices', requireAdmin, (req, res) => {
     try {
       const companyId = (req.query.company_id || req.query.companyId) as string | undefined;
       const result = clearInvoices(db, companyId);
@@ -251,7 +436,7 @@ async function startServer() {
     }
   });
 
-  app.all('/api/clear-company-data', (req, res) => {
+  app.all('/api/clear-company-data', requireAdmin, (req, res) => {
     try {
       const companyId = (req.query.company_id || req.query.companyId || req.body?.company_id || req.body?.companyId) as string | undefined;
       const result = clearCompanyData(db, companyId);
@@ -261,7 +446,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/clear-all', (req, res) => {
+  app.post('/api/clear-all', requireAdmin, (req, res) => {
     try {
       const companyId = (req.query.company_id || req.query.companyId || req.body?.company_id || req.body?.companyId) as string | undefined;
       const result = clearCompanyData(db, companyId);
@@ -271,7 +456,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/clear-all', (req, res) => {
+  app.delete('/api/clear-all', requireAdmin, (req, res) => {
     try {
       const companyId = (req.query.company_id || req.query.companyId) as string | undefined;
       const result = clearCompanyData(db, companyId);
@@ -505,7 +690,7 @@ ${message}`;
     }
   });
 
-  app.post('/api/backup/restore', (req, res) => {
+  app.post('/api/backup/restore', requireAdmin, (req, res) => {
     try {
       const backupData = req.body;
       restoreBackupJson(db, backupData);
@@ -617,7 +802,7 @@ ${message}`;
   });
 
   // Shutdown API Endpoint
-  app.post('/api/shutdown', (req, res) => {
+  app.post('/api/shutdown', requireAdmin, (req, res) => {
     if (isProduction) {
       return res.status(404).json({ error: 'Không thể tắt máy chủ từ ứng dụng đã triển khai.' });
     }

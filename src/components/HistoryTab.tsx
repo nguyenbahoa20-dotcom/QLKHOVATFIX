@@ -29,6 +29,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel,
       (inv.invoiceNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (inv.partnerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (inv.partnerTaxCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv.partnerAddress || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (inv.symbol || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     if (!matchesSearch) return false;
@@ -224,6 +225,9 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ invoices, onExportExcel,
                           <div className="font-semibold text-slate-800 line-clamp-1">{inv.partnerName}</div>
                           {inv.partnerTaxCode && (
                             <div className="text-[11px] text-slate-400 font-mono">MST: {inv.partnerTaxCode}</div>
+                          )}
+                          {inv.partnerAddress && (
+                            <div className="text-[11px] text-slate-500 line-clamp-1" title={inv.partnerAddress}>Địa chỉ: {inv.partnerAddress}</div>
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-right font-mono font-black text-slate-900 whitespace-nowrap">

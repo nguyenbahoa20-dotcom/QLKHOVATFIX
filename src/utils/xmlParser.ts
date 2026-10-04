@@ -7,8 +7,10 @@ export interface ParsedXmlInvoice {
   date: string;
   sellerName: string;
   sellerTaxCode: string;
+  sellerAddress?: string;
   buyerName: string;
   buyerTaxCode: string;
+  buyerAddress?: string;
   productNamesExtracted?: boolean;
   items: InvoiceItem[];
   totalBeforeTax: number;
@@ -194,11 +196,13 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
   // 5. Extract Seller (Supplier) Info
   let sellerName = '';
   let sellerTaxCode = '';
+  let sellerAddress = '';
   const sellerNodes = getElementsUniversal(xmlDoc, ['NBan', 'Seller', 'Supplier', 'Vendor', 'NhaCungCap', 'SellerInfo', 'CoQuanBan', 'BenBan']);
   if (sellerNodes.length > 0) {
     const seller = sellerNodes[0];
     sellerName = getTagTextUniversal(seller, ['Ten', 'TenNBan', 'Name', 'SellerName', 'CompName', 'NhaCungCap']);
     sellerTaxCode = getTagTextUniversal(seller, ['MST', 'MSTNBan', 'TaxCode', 'SellerTaxCode', 'CompTaxCode']);
+    sellerAddress = getTagTextUniversal(seller, ['DChi', 'DiaChi', 'Address', 'SellerAddress', 'SupplierAddress']);
   }
   if (!sellerName) {
     sellerName = getTagTextUniversal(xmlDoc, ['TenNBan', 'SellerName', 'NhaCungCap', 'TenNhaCungCap', 'VendorName']);
@@ -206,22 +210,30 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
   if (!sellerTaxCode) {
     sellerTaxCode = getTagTextUniversal(xmlDoc, ['MSTNBan', 'SellerTaxCode', 'MSTNhaCungCap', 'SupplierTaxCode']);
   }
+  if (!sellerAddress) {
+    sellerAddress = getTagTextUniversal(xmlDoc, ['DChiNBan', 'DiaChiNguoiBan', 'SellerAddress', 'SupplierAddress']);
+  }
   if (!sellerName) sellerName = 'Nhà Cung Cấp VAT';
 
   // 6. Extract Buyer Info
   let buyerName = '';
   let buyerTaxCode = '';
+  let buyerAddress = '';
   const buyerNodes = getElementsUniversal(xmlDoc, ['NMua', 'Buyer', 'Customer', 'KhachHang', 'BuyerInfo', 'CoQuanMua', 'BenMua']);
   if (buyerNodes.length > 0) {
     const buyer = buyerNodes[0];
     buyerName = getTagTextUniversal(buyer, ['Ten', 'TenNMua', 'Name', 'BuyerName', 'CusName', 'KhachHang']);
     buyerTaxCode = getTagTextUniversal(buyer, ['MST', 'MSTNMua', 'TaxCode', 'BuyerTaxCode', 'CusTaxCode']);
+    buyerAddress = getTagTextUniversal(buyer, ['DChi', 'DiaChi', 'Address', 'BuyerAddress', 'CusAddress']);
   }
   if (!buyerName) {
     buyerName = getTagTextUniversal(xmlDoc, ['TenNMua', 'BuyerName', 'KhachHang', 'CustomerName']);
   }
   if (!buyerTaxCode) {
     buyerTaxCode = getTagTextUniversal(xmlDoc, ['MSTNMua', 'BuyerTaxCode', 'CustomerTaxCode']);
+  }
+  if (!buyerAddress) {
+    buyerAddress = getTagTextUniversal(xmlDoc, ['DChiNMua', 'DiaChiNguoiMua', 'BuyerAddress', 'CustomerAddress']);
   }
   sellerName = cleanInvoicePartyName(sellerName);
   buyerName = cleanInvoicePartyName(buyerName);
@@ -337,8 +349,10 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
     date,
     sellerName,
     sellerTaxCode,
+    sellerAddress,
     buyerName,
     buyerTaxCode,
+    buyerAddress,
     items,
     totalBeforeTax,
     vatAmount,

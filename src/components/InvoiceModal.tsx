@@ -25,6 +25,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [partnerName, setPartnerName] = useState('');
   const [partnerTaxCode, setPartnerTaxCode] = useState('');
+  const [partnerAddress, setPartnerAddress] = useState('');
   const [buyerName, setBuyerName] = useState('');
   const [buyerTaxCode, setBuyerTaxCode] = useState('');
   const [xmlFileName, setXmlFileName] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
     setDate(new Date().toISOString().slice(0, 10));
     setPartnerName('');
     setPartnerTaxCode('');
+    setPartnerAddress('');
     setBuyerName('');
     setBuyerTaxCode('');
     setXmlFileName(null);
@@ -151,6 +153,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
       type,
       partnerName: partnerName || (type === 'INBOUND' ? 'Nhà cung cấp VAT' : 'Khách hàng VAT'),
       partnerTaxCode,
+      partnerAddress: partnerAddress.trim(),
       buyerName,
       buyerTaxCode,
       items: finalItems,
@@ -202,6 +205,8 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
           if (parsed.date) setDate(parsed.date);
           if (parsed.sellerName) setPartnerName(parsed.sellerName);
           if (parsed.sellerTaxCode) setPartnerTaxCode(parsed.sellerTaxCode);
+          const parsedAddress = type === 'OUTBOUND' ? parsed.buyerAddress : parsed.sellerAddress;
+          if (parsedAddress) setPartnerAddress(parsedAddress);
           if (parsed.buyerName) setBuyerName(parsed.buyerName);
           if (parsed.buyerTaxCode) setBuyerTaxCode(parsed.buyerTaxCode);
           if (parsed.items && parsed.items.length > 0) {
@@ -246,6 +251,8 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
               setPartnerName(parsed.sellerName);
             }
             if (parsed.sellerTaxCode) setPartnerTaxCode(parsed.sellerTaxCode);
+            const parsedAddress = type === 'OUTBOUND' ? parsed.buyerAddress : parsed.sellerAddress;
+            if (parsedAddress) setPartnerAddress(parsedAddress);
             if (parsed.buyerName) setBuyerName(parsed.buyerName);
             if (parsed.buyerTaxCode) setBuyerTaxCode(parsed.buyerTaxCode);
 
@@ -471,6 +478,19 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                 onChange={(e) => setPartnerTaxCode(e.target.value)}
                 placeholder="VD: 0109887766"
                 className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg font-mono"
+              />
+            </div>
+
+            <div className="sm:col-span-2 lg:col-span-4">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                {type === 'INBOUND' ? 'Địa Chỉ Người Bán' : 'Địa Chỉ Người Mua'}
+              </label>
+              <input
+                type="text"
+                value={partnerAddress}
+                onChange={(e) => setPartnerAddress(e.target.value)}
+                placeholder={type === 'INBOUND' ? 'Nhập địa chỉ nhà cung cấp' : 'Nhập địa chỉ khách mua hàng'}
+                className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg font-medium"
               />
             </div>
           </div>

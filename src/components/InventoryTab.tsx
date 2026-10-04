@@ -4,6 +4,7 @@ import {
   CheckCircle2, Download, Edit2, Trash2, ShieldAlert, FileSpreadsheet, Layers, RefreshCw, Zap
 } from 'lucide-react';
 import { InventoryItem, InvoiceItem } from '../types';
+import { ExcelInventoryImportModal } from './ExcelInventoryImportModal';
 
 interface InventoryTabProps {
   inventory: InventoryItem[];
@@ -14,6 +15,8 @@ interface InventoryTabProps {
   onDeleteItem: (sku: string) => void;
   onDeleteMultipleItems?: (skus: string[]) => void;
   onExportExcel: () => void;
+  onImportExcel: (items: InventoryItem[]) => Promise<void>;
+  companyId: string;
   onResetAllData?: () => void;
   onResyncInventory?: () => void;
   canManageData?: boolean;
@@ -28,6 +31,8 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
   onDeleteItem,
   onDeleteMultipleItems,
   onExportExcel,
+  onImportExcel,
+  companyId,
   onResetAllData,
   onResyncInventory,
   canManageData = true,
@@ -37,6 +42,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
   const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
   const [selectedSkus, setSelectedSkus] = useState<string[]>([]);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
 
   // Calculated Stats
   const totalItems = inventory.length;
@@ -308,6 +314,13 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {canManageData && <button
+              onClick={() => setIsExcelImportOpen(true)}
+              className="px-4 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-2xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Nhập từ Excel</span>
+            </button>}
             <button
               onClick={onExportExcel}
               className="px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-2xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
@@ -331,9 +344,16 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
               </button>
             )}
           </div>
-        </div>
+      </div>
 
-        {/* Selected Banner Bar */}
+      {isExcelImportOpen && <ExcelInventoryImportModal
+        inventory={inventory}
+        companyId={companyId}
+        onClose={() => setIsExcelImportOpen(false)}
+        onImport={onImportExcel}
+      />}
+
+      {/* Selected Banner Bar */}
         {canManageData && selectedSkus.length > 0 && (
           <div className="px-6 py-3 bg-rose-50/90 border-b border-rose-200 flex items-center justify-between text-xs animate-in fade-in slide-in-from-top-1">
             <div className="flex items-center gap-2 font-bold text-rose-900">

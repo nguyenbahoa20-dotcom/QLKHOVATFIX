@@ -41,6 +41,11 @@ jobs:
           New-Item -ItemType Directory -Force -Path 'runtime' | Out-Null
           Expand-Archive -Path $zip -DestinationPath 'runtime'
           Remove-Item $zip -Force
+          $npmCli = Join-Path 'runtime' "$folder\node_modules\npm\bin\npm-cli.js"
+          $npmPrefix = Join-Path 'runtime' "$folder\node_modules\npm\bin\npm-prefix.js"
+          if (-not (Test-Path $npmCli) -or -not (Test-Path $npmPrefix)) {
+            throw 'Portable Node.js archive is missing npm files required by npm.cmd.'
+          }
 
       - name: Assemble portable ZIP without local data or installed packages
         shell: pwsh

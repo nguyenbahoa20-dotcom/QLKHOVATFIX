@@ -3,7 +3,24 @@
 Tệp này là mẫu ghi chú chung để người dùng, Gemini và ChatGPT nhìn cùng yêu cầu. Nó không tự gửi tin nhắn giữa các AI; người dùng cập nhật nội dung và cung cấp PR/link cần xem.
 
 ## Trạng thái
-REVIEW_REQUESTED
+IN_PROGRESS
+
+## Cập nhật công việc 2026-10-04
+- Việc cần làm hiện tại: Thêm luồng nhập ảnh chụp tồn kho từ Excel, có xem trước, xác nhận và xử lý mã SKU trùng.
+- Thay đổi: thêm parser cho bảng tồn kho hai hàng tiêu đề; thêm modal xem trước; thêm API nhập hàng loạt có xác thực Admin và giao dịch SQLite; ghi hướng dẫn dùng trong README.
+- Giới hạn dữ liệu: file Excel tồn cuối kỳ không có lịch sử hóa đơn. Import đặt tồn chốt kỳ làm số dư hàng hóa hiện tại (totalInbound bằng số tồn, totalOutbound bằng 0); không tạo invoice. Chạy resync hóa đơn sau này sẽ tính lại tồn theo dữ liệu hóa đơn.
+- Kiểm tra: `npm run lint` thành công tại thư mục chạy cũ. `npm run build` bị sandbox chặn esbuild đọc thư mục cha khi nạp `vite.config.ts`; chưa xác nhận được bản build. Thử gọi parser với file Excel thật bị Node dừng trước khi chạy mã do `uv_os_get_passwd returned ENOMEM`. Không có test tự động trong package.json.
+- Git: thư mục làm việc được cung cấp không có thư mục `.git`, nên chưa thể tạo branch riêng hoặc PR theo quy ước dự án.
+
+### Sửa lỗi xác nhận nhập Excel
+- Lỗi người dùng chụp: endpoint nhập hàng loạt trả HTML (giao diện cũ đang chạy máy chủ không có route mới).
+- Cách xử lý: client phát hiện phản hồi không phải JSON thì dùng endpoint lưu mặt hàng cũ theo lô 12; sau lỗi sẽ tải lại tồn kho để phần xem trước phản ánh các dòng đã kịp lưu. Cần kiểm tra lại trong ứng dụng đang chạy; không ghi thử vào cơ sở dữ liệu của người dùng.
+- Kiểm tra mới nhất: `npm run lint` thành công tại thư mục chạy cũ. Không thể gọi parser độc lập hoặc build giao diện trong sandbox do lỗi môi trường Node/esbuild đã nêu.
+
+### Bổ sung địa chỉ đối tác trên hóa đơn
+- Thêm ô địa chỉ người mua cho hóa đơn xuất kho (và địa chỉ người bán cho hóa đơn nhập), lưu vào SQLite với migration tự thêm cột cho DB cũ; backup/restore và báo cáo Excel cũng giữ địa chỉ.
+- XML/PDF được đọc địa chỉ người mua khi có trường phù hợp. Cần khởi động lại máy chủ để migration và lưu trường mới có hiệu lực.
+- Kiểm tra: `npm run lint` thành công tại thư mục chạy cũ. Chưa chạy lại build; lần build trước bị sandbox chặn esbuild đọc thư mục cha.
 
 ## Yêu cầu
 - Việc cần làm: Phát hành gói Windows tự chạy, có Node.js portable, tự cài thư viện lần đầu và khởi động bằng VBS.

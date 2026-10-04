@@ -80,6 +80,7 @@ function ensureSchema(db: Database) {
       type TEXT NOT NULL,
       partnerName TEXT NOT NULL,
       partnerTaxCode TEXT,
+      partnerAddress TEXT,
       items TEXT NOT NULL,
       totalBeforeTax REAL NOT NULL,
       vatAmount REAL NOT NULL,
@@ -138,6 +139,7 @@ function ensureSchema(db: Database) {
   // Safely add companyId column to existing databases
   try { db.run(`ALTER TABLE inventory ADD COLUMN companyId TEXT;`); } catch {}
   try { db.run(`ALTER TABLE invoices ADD COLUMN companyId TEXT;`); } catch {}
+  try { db.run(`ALTER TABLE invoices ADD COLUMN partnerAddress TEXT;`); } catch {}
 
   // Seed default companies if companies table is empty
   const resComp = db.exec(`SELECT count(*) as count FROM companies`);
@@ -187,8 +189,8 @@ function initSchemaAndSeed(db: Database) {
 
   // Seed invoices
   const stmtInvDoc = db.prepare(`
-    INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, partnerAddress, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   initialInvoices.forEach((inv) => {
@@ -201,6 +203,7 @@ function initSchemaAndSeed(db: Database) {
       inv.type,
       inv.partnerName,
       inv.partnerTaxCode || '',
+      inv.partnerAddress || '',
       JSON.stringify(inv.items),
       inv.totalBeforeTax,
       inv.vatAmount,
@@ -335,7 +338,7 @@ export function getAllInventory(db: Database, companyId?: string): InventoryItem
   });
 }
 
-export function saveOrUpdateInventoryItem(db: Database, item: InventoryItem) {
+export function saveOrUpdateInventoryItem(db: Database, item: InventoryItem, persist = true) {
   const companyId = item.companyId || 'comp-1';
   const existing = db.exec(`SELECT sku FROM inventory WHERE sku = '${item.sku.replace(/'/g, "''")}' AND (companyId = '${companyId}' OR companyId IS NULL)`);
   if (existing.length > 0 && existing[0].values.length > 0) {
@@ -380,7 +383,19 @@ export function saveOrUpdateInventoryItem(db: Database, item: InventoryItem) {
       ]
     );
   }
-  saveDatabase(db);
+  if (persist) saveDatabase(db);
+}
+
+export function bulkSaveOrUpdateInventoryItems(db: Database, items: InventoryItem[]) {
+  db.run('BEGIN TRANSACTION');
+  try {
+    items.forEach((item) => saveOrUpdateInventoryItem(db, item, false));
+    db.run('COMMIT');
+    saveDatabase(db);
+  } catch (error) {
+    db.run('ROLLBACK');
+    throw error;
+  }
 }
 
 export function deleteInventoryItemBySku(db: Database, sku: string, companyId?: string) {
@@ -433,6 +448,7 @@ export function getAllInvoices(db: Database, companyId?: string): Invoice[] {
       type: obj.type as 'INBOUND' | 'OUTBOUND',
       partnerName: obj.partnerName,
       partnerTaxCode: obj.partnerTaxCode,
+      partnerAddress: obj.partnerAddress || '',
       items: parsedItems,
       totalBeforeTax: Number(obj.totalBeforeTax),
       vatAmount: Number(obj.vatAmount),
@@ -674,8 +690,8 @@ export function addInvoiceAndUpdateStock(db: Database, invoice: Invoice) {
 
   // 1. Insert invoice
   db.run(
-    `INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, partnerAddress, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       invoice.id,
       companyId,
@@ -685,6 +701,7 @@ export function addInvoiceAndUpdateStock(db: Database, invoice: Invoice) {
       invoice.type,
       invoice.partnerName,
       invoice.partnerTaxCode || '',
+      invoice.partnerAddress || '',
       JSON.stringify(invoice.items),
       invoice.totalBeforeTax,
       invoice.vatAmount,
@@ -892,8 +909,8 @@ export function restoreBackupJson(db: Database, data: any) {
   if (Array.isArray(data.invoices) && data.invoices.length > 0) {
     db.run(`DELETE FROM invoices`);
     const stmtInvDoc = db.prepare(`
-      INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, partnerAddress, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     data.invoices.forEach((inv: Invoice) => {
       stmtInvDoc.run([
@@ -905,6 +922,7 @@ export function restoreBackupJson(db: Database, data: any) {
         inv.type,
         inv.partnerName,
         inv.partnerTaxCode || '',
+        inv.partnerAddress || '',
         JSON.stringify(inv.items),
         inv.totalBeforeTax,
         inv.vatAmount,

@@ -35,6 +35,7 @@ export interface Invoice {
   type: InvoiceType;
   partnerName: string; // Tên công ty người bán (Nhập) hoặc người mua (Xuất)
   partnerTaxCode: string; // Mã số thuế
+  partnerAddress?: string; // Địa chỉ người bán/người mua
   buyerName?: string;
   buyerTaxCode?: string;
   items: InvoiceItem[];

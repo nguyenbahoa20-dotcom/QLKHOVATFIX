@@ -22,6 +22,14 @@ Sau khi các thay đổi launcher được chấp nhận, mở **Actions → Pac
 
 User có thể xem và nhập dữ liệu nhưng không thể xóa hóa đơn/lịch sử, xóa hàng khỏi kho, làm sạch dữ liệu hoặc phục hồi bản sao lưu. Các thao tác này dành cho Admin. Sau khi máy chủ khởi động lại, người dùng cần đăng nhập lại. Không đưa máy chủ phát triển ra Internet.
 
+### Nhập tồn kho từ Excel
+
+Trong tab **Kho VAT**, chọn **Nhập từ Excel**, chọn bảng tính có các cột **Mã hàng**, **Tên hàng**, **ĐVT** và nhóm **Cuối kỳ** gồm **Số lượng** và **Giá trị**. Ứng dụng đọc file tại máy, hiển thị phần xem trước, số dòng hợp lệ, dòng bị bỏ qua và mã hàng đã có trước khi ghi dữ liệu. Chỉ Admin mới có nút nhập.
+
+Mã hàng trùng được bỏ qua theo mặc định. Có thể chọn cập nhật theo file; khi cập nhật, tên hàng, đơn vị, tồn và giá vốn được thay, còn danh mục và ngưỡng cảnh báo được giữ lại. Dữ liệu Excel là ảnh chụp tồn cuối kỳ, không chứa chi tiết hóa đơn: khi nhập, tồn cuối kỳ được lưu làm số dư ban đầu (tổng nhập bằng số tồn, tổng xuất bằng 0), không tạo lịch sử hóa đơn. Nếu sau đó chạy đồng bộ tồn từ lịch sử hóa đơn, số tồn có thể được tính lại theo các hóa đơn đã lưu.
+
+Khi lập hóa đơn xuất kho, có thể nhập địa chỉ người mua trong mục **Địa Chỉ Người Mua**. Địa chỉ được lưu cùng hóa đơn và có trong các báo cáo Excel; nếu XML/PDF có địa chỉ người mua, ứng dụng sẽ thử điền tự động để người dùng kiểm tra.
+
 ## Triển khai trực tuyến bằng Render
 
 Tệp `render.yaml` cấu hình máy chủ Node dùng đúng phiên bản thư viện trong `bun.lock`, có ổ lưu trữ bền vững cho SQLite và tự cập nhật khi nhánh `main` đổi.

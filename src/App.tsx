@@ -40,6 +40,7 @@ import {
   fetchGmailConfig,
   fetchEmailLogs,
   apiSaveInventoryItem,
+  apiImportInventoryFromExcel,
   apiDeleteInventoryItem,
   apiBulkDeleteInventoryItems,
   apiSaveInvoice,
@@ -320,6 +321,18 @@ export default function App() {
         editingItem ? 'cập nhật' : 'thêm mới'
       } sản phẩm ${itemToSave.name} vào kho công ty ${currentCompany?.name}!`
     );
+  };
+
+  const handleImportInventoryExcel = async (items: InventoryItem[]) => {
+    try {
+      const updatedInventory = await apiImportInventoryFromExcel(items);
+      setInventory(updatedInventory.filter((item) => item && item.sku));
+      showToast(`Đã nhập/cập nhật ${items.length} mặt hàng từ Excel cho ${currentCompany?.name || 'công ty đang chọn'}.`);
+    } catch (error) {
+      const latestInventory = await fetchInventory(selectedCompanyId).catch(() => null);
+      if (latestInventory) setInventory(latestInventory.filter((item) => item && item.sku));
+      throw error;
+    }
   };
 
   // Delete item with SQLite synchronization
@@ -676,6 +689,7 @@ export default function App() {
           type: 'INBOUND',
           partnerName: parsed.sellerName || 'Đơn vị bán VAT',
           partnerTaxCode: parsed.sellerTaxCode || '',
+          partnerAddress: parsed.sellerAddress || '',
           buyerName: parsed.buyerName,
           buyerTaxCode: parsed.buyerTaxCode,
           items: parsed.items,
@@ -936,6 +950,8 @@ export default function App() {
             onDeleteItem={handleDeleteItem}
             onDeleteMultipleItems={handleDeleteMultipleItems}
             onExportExcel={handleExportExcel}
+            onImportExcel={handleImportInventoryExcel}
+            companyId={selectedCompanyId}
             onResetAllData={isAdmin ? handleResetAllData : undefined}
             onResyncInventory={handleResyncInventory}
           />
