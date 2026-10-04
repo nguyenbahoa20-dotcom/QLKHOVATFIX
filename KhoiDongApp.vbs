@@ -14,12 +14,12 @@ command = "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File " & _
 launchCode = shell.Run(command, 0, True)
 
 If launchCode = 0 Then
-    If IsAppReady(url) Then
-        shell.Run url
-    Else
-        ShowLaunchError
-    End If
+    ' PowerShell returns success only after its own HTTP readiness check passed.
+    ' Do not perform a second, racy WinHTTP check here during Windows startup.
+    shell.Run Chr(34) & url & Chr(34), 1, False
 ElseIf launchCode <> 2 Then
+    ShowLaunchError
+ElseIf Not WaitForApp(url) Then
     ShowLaunchError
 End If
 
@@ -40,4 +40,16 @@ Function IsAppReady(testUrl)
     Err.Clear
     Set request = Nothing
     On Error GoTo 0
+End Function
+
+Function WaitForApp(testUrl)
+    Dim attempt
+    For attempt = 1 To 15
+        If IsAppReady(testUrl) Then
+            WaitForApp = True
+            Exit Function
+        End If
+        WScript.Sleep 1000
+    Next
+    WaitForApp = False
 End Function

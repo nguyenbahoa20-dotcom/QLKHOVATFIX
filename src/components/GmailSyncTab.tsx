@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Mail, Key, ShieldCheck, RefreshCw, FileText, CheckCircle2, AlertCircle, Info, Send, ArrowRight, Zap, ExternalLink, Upload, Sparkles } from 'lucide-react';
+import { Mail, Key, ShieldCheck, RefreshCw, FileText, CheckCircle2, AlertCircle, Info, Send, ArrowRight, Zap, ExternalLink, Upload, Sparkles, Trash2 } from 'lucide-react';
 import { GmailConfig, EmailLog, Invoice } from '../types';
 import { parseInvoiceXml } from '../utils/xmlParser';
 
@@ -37,6 +37,25 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
     onSaveConfig(formData);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  const handleClearConfig = () => {
+    if (!window.confirm('Xóa email, App Password và cấu hình quét Gmail đã lưu trên máy này?')) return;
+    const emptyConfig: GmailConfig = {
+      email: '',
+      appPassword: '',
+      isConnected: false,
+      autoScanIntervalMinutes: 60,
+      lastSyncTime: '',
+      imapHost: 'imap.gmail.com',
+      imapPort: 993,
+      enableAlerts: false,
+      alertEmailRecipient: '',
+    };
+    onSaveConfig(emptyConfig);
+    setFormData(emptyConfig);
+    setSaveSuccess(false);
+    setTestEmailStatus(null);
   };
 
   const handleSendTestAlert = () => {
@@ -352,13 +371,23 @@ export const GmailSyncTab: React.FC<GmailSyncTabProps> = ({
                 Lần quét gần nhất: <span className="font-bold text-slate-800">{config.lastSyncTime || 'Chưa thực hiện'}</span>
               </span>
 
-              <button
-                type="submit"
-                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-xs transition-all flex items-center gap-2"
-              >
-                <CheckCircle2 className="w-4 h-4 text-blue-400" />
-                <span>Lưu Cấu Hình</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleClearConfig}
+                  className="px-4 py-2.5 bg-white hover:bg-rose-50 text-rose-700 text-xs font-bold rounded-2xl border border-rose-200 transition-all flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Xóa cấu hình</span>
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-xs transition-all flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                  <span>Lưu Cấu Hình</span>
+                </button>
+              </div>
             </div>
 
             {saveSuccess && (
