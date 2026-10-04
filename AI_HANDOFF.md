@@ -10,7 +10,13 @@ IN_PROGRESS
 - Thay đổi: thêm parser cho bảng tồn kho hai hàng tiêu đề; thêm modal xem trước; thêm API nhập hàng loạt có xác thực Admin và giao dịch SQLite; ghi hướng dẫn dùng trong README.
 - Giới hạn dữ liệu: file Excel tồn cuối kỳ không có lịch sử hóa đơn. Import đặt tồn chốt kỳ làm số dư hàng hóa hiện tại (totalInbound bằng số tồn, totalOutbound bằng 0); không tạo invoice. Chạy resync hóa đơn sau này sẽ tính lại tồn theo dữ liệu hóa đơn.
 - Kiểm tra: `npm run lint` thành công tại thư mục chạy cũ. `npm run build` bị sandbox chặn esbuild đọc thư mục cha khi nạp `vite.config.ts`; chưa xác nhận được bản build. Thử gọi parser với file Excel thật bị Node dừng trước khi chạy mã do `uv_os_get_passwd returned ENOMEM`. Không có test tự động trong package.json.
-- Git: thư mục làm việc được cung cấp không có thư mục `.git`, nên chưa thể tạo branch riêng hoặc PR theo quy ước dự án.
+- Git: thư mục làm việc là snapshot không có `.git`; các cập nhật được đồng bộ qua GitHub API lên PR #3 đang mở, không merge tự động.
+
+### Đổi tên bộ chạy Windows và cấu hình Gmail (2026-10-04)
+- Đổi launcher sang `TaxVaultPro.vbs` và `TaxVaultPro.ps1`; BAT gọi launcher mới. Workflow đóng gói thư mục `TaxVault Pro` và artifact `TaxVault-Pro-Windows-Portable`.
+- Gmail hiện là một cấu hình dùng chung. Có thể thay Gmail bằng cách nhập email/App Password mới và lưu; nút **Xóa cấu hình** xóa thông tin đã lưu khỏi ứng dụng. App Password cần được thu hồi riêng trong tài khoản Google.
+- Đã đồng bộ launcher và thư mục chạy vào các bản phát hành cục bộ. ZIP khách `TaxVault Pro.zip` kèm Node.js và node_modules, bọc trong thư mục `TaxVault Pro`; ZIP portable `TaxVault Pro Portable.zip` không kèm node_modules. Cả hai không có DB, `.env`, cache hay log.
+- `npm run lint` thành công trong thư mục chạy sau khi đổi tên. Commit đã đẩy lên nhánh PR `deploy/render-persistent-auth`; GitHub Actions CI đang chạy, cần xem trạng thái cuối trước khi yêu cầu review.
 
 ### Sửa lỗi xác nhận nhập Excel
 - Lỗi người dùng chụp: endpoint nhập hàng loạt trả HTML (giao diện cũ đang chạy máy chủ không có route mới).
