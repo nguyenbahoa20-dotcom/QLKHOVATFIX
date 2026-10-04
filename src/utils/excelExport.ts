@@ -58,6 +58,7 @@ export function exportInventoryToExcel(inventory: InventoryItem[], invoices: Inv
         'Ngày HĐ': inv.date,
         'Đối Tác (Mua/Bán)': inv.partnerName,
         'Mã Số Thuế': inv.partnerTaxCode,
+        'Địa Chỉ Đối Tác': inv.partnerAddress || '',
         'Mã SKU': item.sku,
         'Tên Sản Phẩm': item.name,
         'ĐVT': item.unit,
@@ -80,6 +81,7 @@ export function exportInventoryToExcel(inventory: InventoryItem[], invoices: Inv
     { wch: 14 },
     { wch: 35 },
     { wch: 16 },
+    { wch: 40 },
     { wch: 16 },
     { wch: 40 },
     { wch: 10 },
@@ -129,6 +131,7 @@ export function exportHTKKVATToExcel(invoices: Invoice[], company?: Company) {
       'Ngày, tháng, năm lập HĐ': inv.date,
       'Tên người bán': inv.partnerName,
       'Mã số thuế người bán': inv.partnerTaxCode || '',
+      'Địa chỉ người bán': inv.partnerAddress || '',
       'Doanh số mua chưa có thuế GTGT (VNĐ)': inv.totalBeforeTax,
       'Thuế suất VAT (%)': `${avgVat}%`,
       'Tiền thuế GTGT (VNĐ)': inv.vatAmount,
@@ -144,6 +147,7 @@ export function exportHTKKVATToExcel(invoices: Invoice[], company?: Company) {
     'Ngày, tháng, năm lập HĐ': '',
     'Tên người bán': 'TỔNG CỘNG BẢNG KÊ MUA VÀO',
     'Mã số thuế người bán': '',
+    'Địa chỉ người bán': '',
     'Doanh số mua chưa có thuế GTGT (VNĐ)': inboundSumPreTax,
     'Thuế suất VAT (%)': '',
     'Tiền thuế GTGT (VNĐ)': inboundSumVat,
@@ -158,6 +162,7 @@ export function exportHTKKVATToExcel(invoices: Invoice[], company?: Company) {
     { wch: 18 }, // Ngay lap
     { wch: 42 }, // Ten nguoi ban
     { wch: 20 }, // MST
+    { wch: 42 }, // Dia chi
     { wch: 32 }, // Pretax
     { wch: 16 }, // Thue suat
     { wch: 24 }, // Vat amount
@@ -185,6 +190,7 @@ export function exportHTKKVATToExcel(invoices: Invoice[], company?: Company) {
       'Ngày, tháng, năm lập HĐ': inv.date,
       'Tên người mua': inv.partnerName,
       'Mã số thuế người mua': inv.partnerTaxCode || '',
+      'Địa chỉ người mua': inv.partnerAddress || '',
       'Doanh thu bán chưa có thuế GTGT (VNĐ)': inv.totalBeforeTax,
       'Thuế suất VAT (%)': `${avgVat}%`,
       'Tiền thuế GTGT (VNĐ)': inv.vatAmount,
@@ -200,6 +206,7 @@ export function exportHTKKVATToExcel(invoices: Invoice[], company?: Company) {
     'Ngày, tháng, năm lập HĐ': '',
     'Tên người mua': 'TỔNG CỘNG BẢNG KÊ BÁN RA',
     'Mã số thuế người mua': '',
+    'Địa chỉ người mua': '',
     'Doanh thu bán chưa có thuế GTGT (VNĐ)': outboundSumPreTax,
     'Thuế suất VAT (%)': '',
     'Tiền thuế GTGT (VNĐ)': outboundSumVat,
@@ -214,6 +221,7 @@ export function exportHTKKVATToExcel(invoices: Invoice[], company?: Company) {
     { wch: 18 }, // Ngay lap
     { wch: 42 }, // Ten nguoi mua
     { wch: 20 }, // MST
+    { wch: 42 }, // Dia chi
     { wch: 32 }, // Pretax
     { wch: 16 }, // Thue suat
     { wch: 24 }, // Vat amount

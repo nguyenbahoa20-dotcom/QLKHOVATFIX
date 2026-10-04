@@ -1,5 +1,12 @@
 export type InvoiceType = 'INBOUND' | 'OUTBOUND'; // INBOUND = Mua vào (Nhập), OUTBOUND = Bán ra (Xuất)
 
+export interface AppUser {
+  id: string;
+  username: string;
+  role: 'admin' | 'user';
+  createdAt: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -28,6 +35,9 @@ export interface Invoice {
   type: InvoiceType;
   partnerName: string; // Tên công ty người bán (Nhập) hoặc người mua (Xuất)
   partnerTaxCode: string; // Mã số thuế
+  partnerAddress?: string; // Địa chỉ người bán/người mua
+  buyerName?: string;
+  buyerTaxCode?: string;
   items: InvoiceItem[];
   totalBeforeTax: number;
   vatAmount: number;

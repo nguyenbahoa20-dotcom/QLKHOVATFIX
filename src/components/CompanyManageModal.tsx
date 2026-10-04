@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Building2, X, Plus, Edit2, Trash2, Check, AlertTriangle, Search, Save } from 'lucide-react';
+import { Building2, X, Edit2, Trash2, Check, AlertTriangle, Search, Save } from 'lucide-react';
 import { Company } from '../types';
 
 interface CompanyManageModalProps {
@@ -11,6 +11,7 @@ interface CompanyManageModalProps {
   onSaveCompany: (company: Company) => void;
   onDeleteCompany: (companyId: string) => void;
   onOpenAddModal: () => void;
+  canDeleteCompany?: boolean;
 }
 
 export const CompanyManageModal: React.FC<CompanyManageModalProps> = ({
@@ -22,6 +23,7 @@ export const CompanyManageModal: React.FC<CompanyManageModalProps> = ({
   onSaveCompany,
   onDeleteCompany,
   onOpenAddModal,
+  canDeleteCompany = true,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
@@ -119,8 +121,7 @@ export const CompanyManageModal: React.FC<CompanyManageModalProps> = ({
             }}
             className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-2xs shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ Thêm Công Ty Mới</span>
+              <span>Thêm Công Ty Mới</span>
           </button>
         </div>
 
@@ -272,14 +273,14 @@ export const CompanyManageModal: React.FC<CompanyManageModalProps> = ({
                       <span>Sửa</span>
                     </button>
 
-                    <button
+                    {canDeleteCompany && <button
                       onClick={() => setCompanyToDelete(comp)}
                       className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors flex items-center gap-1"
                       title="Xóa công ty khỏi hệ thống"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-rose-600" />
                       <span>Xóa</span>
-                    </button>
+                    </button>}
                   </div>
                 </div>
               );

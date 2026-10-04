@@ -7,12 +7,24 @@ export interface ParsedXmlInvoice {
   date: string;
   sellerName: string;
   sellerTaxCode: string;
+  sellerAddress?: string;
   buyerName: string;
   buyerTaxCode: string;
+  buyerAddress?: string;
+  productNamesExtracted?: boolean;
   items: InvoiceItem[];
   totalBeforeTax: number;
   vatAmount: number;
   totalWithTax: number;
+}
+
+/** Remove a role label accidentally included in a party name, such as "(Seller): ACME". */
+export function cleanInvoicePartyName(value: string): string {
+  return (value || '')
+    .normalize('NFKC')
+    .replace(/^\s*\(?\s*(?:seller|buyer)\s*\)?\s*:\s*/i, '')
+    .replace(/^\s*(?:tên\s*đơn\s*vị(?:\s*\([^)]*\))?|company(?:'s\s*name)?|seller(?:'s\s*name)?|buyer(?:'s\s*name)?)\s*:\s*/i, '')
+    .trim();
 }
 
 /**
@@ -140,7 +152,10 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
   ]);
   if (!invoiceNumber) {
     const match = xmlContent.match(/<(?:[a-zA-Z0-9_-]+:)?(?:SHDon|InvoiceNumber|SoHoaDon|SoHD|InvoiceNo|InvNo)>([^<]+)<\//i);
-    invoiceNumber = match ? match[1].trim() : String(Math.floor(1000000 + Math.random() * 9000000));
+    invoiceNumber = match ? match[1].trim() : '';
+  }
+  if (!invoiceNumber) {
+    throw new Error('Không tìm thấy số hóa đơn trong file XML. Không thể lưu hóa đơn để tránh phát sinh tồn kho trùng.');
   }
 
   // 2. Extract Symbol / Serial
@@ -181,11 +196,13 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
   // 5. Extract Seller (Supplier) Info
   let sellerName = '';
   let sellerTaxCode = '';
+  let sellerAddress = '';
   const sellerNodes = getElementsUniversal(xmlDoc, ['NBan', 'Seller', 'Supplier', 'Vendor', 'NhaCungCap', 'SellerInfo', 'CoQuanBan', 'BenBan']);
   if (sellerNodes.length > 0) {
     const seller = sellerNodes[0];
     sellerName = getTagTextUniversal(seller, ['Ten', 'TenNBan', 'Name', 'SellerName', 'CompName', 'NhaCungCap']);
     sellerTaxCode = getTagTextUniversal(seller, ['MST', 'MSTNBan', 'TaxCode', 'SellerTaxCode', 'CompTaxCode']);
+    sellerAddress = getTagTextUniversal(seller, ['DChi', 'DiaChi', 'Address', 'SellerAddress', 'SupplierAddress']);
   }
   if (!sellerName) {
     sellerName = getTagTextUniversal(xmlDoc, ['TenNBan', 'SellerName', 'NhaCungCap', 'TenNhaCungCap', 'VendorName']);
@@ -193,16 +210,21 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
   if (!sellerTaxCode) {
     sellerTaxCode = getTagTextUniversal(xmlDoc, ['MSTNBan', 'SellerTaxCode', 'MSTNhaCungCap', 'SupplierTaxCode']);
   }
+  if (!sellerAddress) {
+    sellerAddress = getTagTextUniversal(xmlDoc, ['DChiNBan', 'DiaChiNguoiBan', 'SellerAddress', 'SupplierAddress']);
+  }
   if (!sellerName) sellerName = 'Nhà Cung Cấp VAT';
 
   // 6. Extract Buyer Info
   let buyerName = '';
   let buyerTaxCode = '';
+  let buyerAddress = '';
   const buyerNodes = getElementsUniversal(xmlDoc, ['NMua', 'Buyer', 'Customer', 'KhachHang', 'BuyerInfo', 'CoQuanMua', 'BenMua']);
   if (buyerNodes.length > 0) {
     const buyer = buyerNodes[0];
     buyerName = getTagTextUniversal(buyer, ['Ten', 'TenNMua', 'Name', 'BuyerName', 'CusName', 'KhachHang']);
     buyerTaxCode = getTagTextUniversal(buyer, ['MST', 'MSTNMua', 'TaxCode', 'BuyerTaxCode', 'CusTaxCode']);
+    buyerAddress = getTagTextUniversal(buyer, ['DChi', 'DiaChi', 'Address', 'BuyerAddress', 'CusAddress']);
   }
   if (!buyerName) {
     buyerName = getTagTextUniversal(xmlDoc, ['TenNMua', 'BuyerName', 'KhachHang', 'CustomerName']);
@@ -210,6 +232,11 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
   if (!buyerTaxCode) {
     buyerTaxCode = getTagTextUniversal(xmlDoc, ['MSTNMua', 'BuyerTaxCode', 'CustomerTaxCode']);
   }
+  if (!buyerAddress) {
+    buyerAddress = getTagTextUniversal(xmlDoc, ['DChiNMua', 'DiaChiNguoiMua', 'BuyerAddress', 'CustomerAddress']);
+  }
+  sellerName = cleanInvoicePartyName(sellerName);
+  buyerName = cleanInvoicePartyName(buyerName);
 
   // 7. Extract Line Items
   const items: InvoiceItem[] = [];
@@ -322,8 +349,10 @@ export function parseInvoiceXml(xmlContent: string): ParsedXmlInvoice {
     date,
     sellerName,
     sellerTaxCode,
+    sellerAddress,
     buyerName,
     buyerTaxCode,
+    buyerAddress,
     items,
     totalBeforeTax,
     vatAmount,

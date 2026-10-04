@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: qlkhovatfix-app
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: bun install --frozen-lockfile && bun run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    disk:
+      name: qlkhovatfix-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VAT_DATABASE_PATH
+        value: /var/data/vat_database.db
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: BUN_VERSION
+        value: 1.2.22

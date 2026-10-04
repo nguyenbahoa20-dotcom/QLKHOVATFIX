@@ -1,4 +1,4 @@
-import { Company, InventoryItem, Invoice, GmailConfig, EmailLog } from '../types';
+import { AppUser, Company, InventoryItem, Invoice, GmailConfig, EmailLog } from '../types';
 import { initialCompanies } from '../data/initialData';
 
 const API_BASE_URL =
@@ -17,11 +17,55 @@ async function fetchWithFallback(endpoint: string, options?: RequestInit): Promi
     ? endpoint
     : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   try {
-    const res = await fetch(targetUrl, options);
+    const res = await fetch(targetUrl, { ...options, credentials: options?.credentials || 'include' });
     return res;
   } catch (e) {
     throw new Error(`Không thể kết nối máy chủ API tại ${targetUrl}`);
   }
+}
+
+async function authRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers);
+  headers.set('Content-Type', 'application/json');
+  const res = await fetchWithFallback(path, {
+    ...options,
+    headers,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Yêu cầu thất bại (HTTP ${res.status})`);
+  return data as T;
+}
+
+export async function fetchAuthStatus(): Promise<{ needsSetup: boolean; user: AppUser | null }> {
+  return authRequest<{ needsSetup: boolean; user: AppUser | null }>('/api/auth/status');
+}
+
+export async function setupAdminAccount(username: string, password: string): Promise<AppUser> {
+  const result = await authRequest<{ user: AppUser }>('/api/auth/setup', { method: 'POST', body: JSON.stringify({ username, password }) });
+  return result.user;
+}
+
+export async function loginAccount(username: string, password: string): Promise<AppUser> {
+  const result = await authRequest<{ user: AppUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+  return result.user;
+}
+
+export async function logoutAccount(): Promise<void> {
+  await authRequest<{ success: boolean }>('/api/auth/logout', { method: 'POST' });
+}
+
+export async function fetchAppUsers(): Promise<AppUser[]> {
+  return authRequest<AppUser[]>('/api/auth/users');
+}
+
+export async function createAppUser(username: string, password: string, role: AppUser['role'] = 'user'): Promise<AppUser[]> {
+  const result = await authRequest<{ users: AppUser[] }>('/api/auth/users', { method: 'POST', body: JSON.stringify({ username, password, role }) });
+  return result.users;
+}
+
+export async function deleteAppUser(id: string): Promise<AppUser[]> {
+  const result = await authRequest<{ users: AppUser[] }>(`/api/auth/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return result.users;
 }
 
 const LOCAL_STORAGE_KEYS = {
@@ -208,6 +252,43 @@ export async function apiSaveInventoryItem(item: InventoryItem): Promise<Invento
   return fetchInventory(item.companyId);
 }
 
+export async function apiImportInventoryFromExcel(items: InventoryItem[]): Promise<InventoryItem[]> {
+  const res = await fetchWithFallback(`${API_BASE_URL}/api/inventory/import-excel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || errData.error || `Lỗi nhập Excel vào kho (HTTP ${res.status})`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.inventory) ? data.inventory : fetchInventory(items[0]?.companyId);
+  }
+
+  // Compatibility with an already-running server that predates the bulk-import route.
+  // The legacy single-item endpoint is already present and performs an SKU upsert.
+  const batchSize = 12;
+  for (let index = 0; index < items.length; index += batchSize) {
+    const batch = items.slice(index, index + batchSize);
+    await Promise.all(batch.map(async (item) => {
+      const fallbackRes = await fetchWithFallback(`${API_BASE_URL}/api/inventory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      verifyJsonResponse(fallbackRes);
+      if (!fallbackRes.ok) {
+        const errData = await fallbackRes.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.error || `Không lưu được mặt hàng ${item.sku} (HTTP ${fallbackRes.status})`);
+      }
+    }));
+  }
+  return fetchInventory(items[0]?.companyId);
+}
+
 export async function apiDeleteInventoryItem(sku: string, companyId?: string): Promise<InventoryItem[]> {
   const res = await fetchWithFallback(`${API_BASE_URL}/api/inventory/${encodeURIComponent(sku)}`, {
     method: 'DELETE',
@@ -264,13 +345,18 @@ export async function apiSaveInvoice(invoice: Invoice): Promise<{ inventory: Inv
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
     const err: any = new Error(errData.detail || errData.error || `Lỗi lưu hóa đơn vào CSDL (HTTP ${res.status})`);
-    if (errData.detail && errData.detail.includes('đã tồn tại')) {
+    if (errData.isDuplicate || errData.detail?.includes('đã tồn tại') || errData.error?.includes('đã tồn tại')) {
       err.isDuplicate = true;
     }
     throw err;
   }
 
-  const updatedInv = await fetchInventory(invoice.companyId);
+  let updatedInv = await fetchInventory(invoice.companyId);
+  // Some older local databases may contain an invoice but no stock rows.
+  // Rebuild that company's inventory from its saved invoices before returning.
+  if (updatedInv.length === 0 && invoice.items.length > 0) {
+    updatedInv = await apiResyncInventory(invoice.companyId);
+  }
   const updatedInvoices = await fetchInvoices(invoice.companyId);
 
   return { inventory: updatedInv, invoices: updatedInvoices };

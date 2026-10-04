@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, X, Plus, Check } from 'lucide-react';
+import { Building2, X, Check } from 'lucide-react';
 import { Company } from '../types';
 
 interface CompanyModalProps {
@@ -132,7 +132,6 @@ export const CompanyModal: React.FC<CompanyModalProps> = ({
               type="submit"
               className="flex items-center space-x-1.5 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-xs"
             >
-              <Plus className="w-4 h-4" />
               <span>Tạo Công Ty</span>
             </button>
           </div>

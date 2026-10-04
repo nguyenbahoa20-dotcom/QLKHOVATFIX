@@ -4,7 +4,7 @@ import path from 'path';
 import { initialCompanies, initialInventoryItems, initialInvoices, initialEmailLogs, initialGmailConfig } from '../data/initialData.js';
 import { Company, InventoryItem, Invoice, EmailLog, GmailConfig } from '../types.js';
 
-const DB_FILE_PATH = path.join(process.cwd(), 'vat_database.db');
+export const DB_FILE_PATH = process.env.VAT_DATABASE_PATH || path.join(process.cwd(), 'vat_database.db');
 
 let dbInstance: Database | null = null;
 
@@ -16,10 +16,12 @@ export async function getDatabase(): Promise<Database> {
 
   const SQL = await initSqlJs();
 
-  if (fs.existsSync(DB_FILE_PATH)) {
+  if (fs.existsSync(DB_FILE_PATH) && fs.statSync(DB_FILE_PATH).size > 0) {
     const fileBuffer = fs.readFileSync(DB_FILE_PATH);
     dbInstance = new SQL.Database(fileBuffer);
   } else {
+    // AI Studio ZIP exports may include an empty placeholder database file.
+    // Treat it like a new database instead of crashing during startup.
     dbInstance = new SQL.Database();
     initSchemaAndSeed(dbInstance);
     saveDatabase(dbInstance);
@@ -37,6 +39,7 @@ export async function getDatabase(): Promise<Database> {
  */
 export function saveDatabase(db: Database = dbInstance!) {
   if (!db) return;
+  fs.mkdirSync(path.dirname(DB_FILE_PATH), { recursive: true });
   const binaryArray = db.export();
   const buffer = Buffer.from(binaryArray);
   fs.writeFileSync(DB_FILE_PATH, buffer);
@@ -77,12 +80,33 @@ function ensureSchema(db: Database) {
       type TEXT NOT NULL,
       partnerName TEXT NOT NULL,
       partnerTaxCode TEXT,
+      partnerAddress TEXT,
       items TEXT NOT NULL,
       totalBeforeTax REAL NOT NULL,
       vatAmount REAL NOT NULL,
       totalWithTax REAL NOT NULL,
       source TEXT NOT NULL,
       emailSubject TEXT,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id TEXT PRIMARY KEY,
+      invoice_id TEXT,
+      sku TEXT,
+      name TEXT,
+      unit TEXT,
+      quantity REAL DEFAULT 0,
+      unitPrice REAL DEFAULT 0,
+      totalPrice REAL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS app_users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      passwordHash TEXT NOT NULL,
+      passwordSalt TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
       createdAt TEXT NOT NULL
     );
 
@@ -115,6 +139,7 @@ function ensureSchema(db: Database) {
   // Safely add companyId column to existing databases
   try { db.run(`ALTER TABLE inventory ADD COLUMN companyId TEXT;`); } catch {}
   try { db.run(`ALTER TABLE invoices ADD COLUMN companyId TEXT;`); } catch {}
+  try { db.run(`ALTER TABLE invoices ADD COLUMN partnerAddress TEXT;`); } catch {}
 
   // Seed default companies if companies table is empty
   const resComp = db.exec(`SELECT count(*) as count FROM companies`);
@@ -164,8 +189,8 @@ function initSchemaAndSeed(db: Database) {
 
   // Seed invoices
   const stmtInvDoc = db.prepare(`
-    INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, partnerAddress, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   initialInvoices.forEach((inv) => {
@@ -178,6 +203,7 @@ function initSchemaAndSeed(db: Database) {
       inv.type,
       inv.partnerName,
       inv.partnerTaxCode || '',
+      inv.partnerAddress || '',
       JSON.stringify(inv.items),
       inv.totalBeforeTax,
       inv.vatAmount,
@@ -312,7 +338,7 @@ export function getAllInventory(db: Database, companyId?: string): InventoryItem
   });
 }
 
-export function saveOrUpdateInventoryItem(db: Database, item: InventoryItem) {
+export function saveOrUpdateInventoryItem(db: Database, item: InventoryItem, persist = true) {
   const companyId = item.companyId || 'comp-1';
   const existing = db.exec(`SELECT sku FROM inventory WHERE sku = '${item.sku.replace(/'/g, "''")}' AND (companyId = '${companyId}' OR companyId IS NULL)`);
   if (existing.length > 0 && existing[0].values.length > 0) {
@@ -357,7 +383,19 @@ export function saveOrUpdateInventoryItem(db: Database, item: InventoryItem) {
       ]
     );
   }
-  saveDatabase(db);
+  if (persist) saveDatabase(db);
+}
+
+export function bulkSaveOrUpdateInventoryItems(db: Database, items: InventoryItem[]) {
+  db.run('BEGIN TRANSACTION');
+  try {
+    items.forEach((item) => saveOrUpdateInventoryItem(db, item, false));
+    db.run('COMMIT');
+    saveDatabase(db);
+  } catch (error) {
+    db.run('ROLLBACK');
+    throw error;
+  }
 }
 
 export function deleteInventoryItemBySku(db: Database, sku: string, companyId?: string) {
@@ -381,8 +419,9 @@ export function deleteMultipleInventoryItems(db: Database, skus: string[], compa
 }
 
 export function getAllInvoices(db: Database, companyId?: string): Invoice[] {
-  const query = companyId 
-    ? `SELECT * FROM invoices WHERE companyId = '${companyId.replace(/'/g, "''")}' ORDER BY rowid DESC`
+  const escapedCompanyId = companyId?.replace(/'/g, "''");
+  const query = companyId
+    ? `SELECT * FROM invoices WHERE companyId = '${escapedCompanyId}' OR ('${escapedCompanyId}' = 'comp-1' AND (companyId IS NULL OR companyId = '')) ORDER BY rowid DESC`
     : `SELECT * FROM invoices ORDER BY rowid DESC`;
   const res = db.exec(query);
   if (!res || res.length === 0) return [];
@@ -409,6 +448,7 @@ export function getAllInvoices(db: Database, companyId?: string): Invoice[] {
       type: obj.type as 'INBOUND' | 'OUTBOUND',
       partnerName: obj.partnerName,
       partnerTaxCode: obj.partnerTaxCode,
+      partnerAddress: obj.partnerAddress || '',
       items: parsedItems,
       totalBeforeTax: Number(obj.totalBeforeTax),
       vatAmount: Number(obj.vatAmount),
@@ -421,14 +461,21 @@ export function getAllInvoices(db: Database, companyId?: string): Invoice[] {
 }
 
 export function isInvoiceDuplicateInDb(db: Database, companyId: string, invoiceNumber: string, symbol: string, partnerTaxCode: string): boolean {
-  const normNum = (invoiceNumber || '').trim().toLowerCase();
-  const normSym = (symbol || '').trim().toLowerCase();
+  const normalizeInvoiceNumber = (value: string) => {
+    const normalized = (value || '').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return /^\d+$/.test(normalized) ? normalized.replace(/^0+(?=\d)/, '') : normalized;
+  };
+  const normalizeCode = (value: string) => (value || '').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const normNum = normalizeInvoiceNumber(invoiceNumber);
+  const normSym = normalizeCode(symbol);
   const normTax = (partnerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
+  if (!normNum) return false;
+
   const invoices = getAllInvoices(db, companyId);
-  return invoices.some((inv) => {
-    const invNum = (inv.invoiceNumber || '').trim().toLowerCase();
-    const invSym = (inv.symbol || '').trim().toLowerCase();
+  const matchesInvoice = (inv: Invoice) => {
+    const invNum = normalizeInvoiceNumber(inv.invoiceNumber || '');
+    const invSym = normalizeCode(inv.symbol || '');
     const invTax = (inv.partnerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
     const numMatch = invNum === normNum;
@@ -436,7 +483,20 @@ export function isInvoiceDuplicateInDb(db: Database, companyId: string, invoiceN
     const taxMatch = !normTax || !invTax || invTax === normTax;
 
     return numMatch && symMatch && taxMatch;
-  });
+  };
+  if (invoices.some(matchesInvoice)) return true;
+
+  // A repeated file can be assigned to another company if the company selector
+  // changed between imports. A complete invoice identity remains a duplicate.
+  if (normTax) {
+    return getAllInvoices(db).some((inv) => {
+      const existingSymbol = normalizeCode(inv.symbol || '');
+      return normalizeInvoiceNumber(inv.invoiceNumber || '') === normNum &&
+        (inv.partnerTaxCode || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === normTax &&
+        (!normSym || !existingSymbol || existingSymbol === normSym);
+    });
+  }
+  return false;
 }
 
 export function deleteInvoiceById(db: Database, id: string, companyId?: string): { invoices: Invoice[]; inventory: InventoryItem[] } {
@@ -630,8 +690,8 @@ export function addInvoiceAndUpdateStock(db: Database, invoice: Invoice) {
 
   // 1. Insert invoice
   db.run(
-    `INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, partnerAddress, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       invoice.id,
       companyId,
@@ -641,6 +701,7 @@ export function addInvoiceAndUpdateStock(db: Database, invoice: Invoice) {
       invoice.type,
       invoice.partnerName,
       invoice.partnerTaxCode || '',
+      invoice.partnerAddress || '',
       JSON.stringify(invoice.items),
       invoice.totalBeforeTax,
       invoice.vatAmount,
@@ -848,8 +909,8 @@ export function restoreBackupJson(db: Database, data: any) {
   if (Array.isArray(data.invoices) && data.invoices.length > 0) {
     db.run(`DELETE FROM invoices`);
     const stmtInvDoc = db.prepare(`
-      INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO invoices (id, companyId, invoiceNumber, symbol, date, type, partnerName, partnerTaxCode, partnerAddress, items, totalBeforeTax, vatAmount, totalWithTax, source, emailSubject, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     data.invoices.forEach((inv: Invoice) => {
       stmtInvDoc.run([
@@ -861,6 +922,7 @@ export function restoreBackupJson(db: Database, data: any) {
         inv.type,
         inv.partnerName,
         inv.partnerTaxCode || '',
+        inv.partnerAddress || '',
         JSON.stringify(inv.items),
         inv.totalBeforeTax,
         inv.vatAmount,
@@ -879,4 +941,3 @@ export function restoreBackupJson(db: Database, data: any) {
 
   saveDatabase(db);
 }
-
