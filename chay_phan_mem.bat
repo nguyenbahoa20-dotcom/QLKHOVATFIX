@@ -11,7 +11,7 @@ echo Node.js portable duoc chay tu thu muc ung dung.
 echo Lan dau can Internet de cai cac thu vien JavaScript.
 echo.
 
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0KhoiDongApp.ps1" -ShowConsole
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0TaxVaultPro.ps1" -ShowConsole
 set EXIT_CODE=%ERRORLEVEL%
 if not "%EXIT_CODE%"=="0" (
   echo.

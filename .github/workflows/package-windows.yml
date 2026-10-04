@@ -50,17 +50,17 @@ jobs:
       - name: Assemble portable ZIP without local data or installed packages
         shell: pwsh
         run: |
-          $package = Join-Path $env:RUNNER_TEMP 'TaxVaultPro'
+          $package = Join-Path $env:RUNNER_TEMP 'TaxVault Pro'
           New-Item -ItemType Directory -Force -Path $package | Out-Null
           Get-ChildItem -Force | Where-Object { $_.Name -notin @('.git', 'node_modules', '.npm-cache', 'dist', 'build', 'coverage') -and $_.Name -notlike '*.log' -and $_.Name -notlike '.env*' } | ForEach-Object {
             Copy-Item -LiteralPath $_.FullName -Destination $package -Recurse -Force
           }
-          Compress-Archive -Path $package -DestinationPath (Join-Path $env:RUNNER_TEMP 'QLKHOVATFIX-Windows-Portable.zip') -CompressionLevel Optimal
+          Compress-Archive -Path $package -DestinationPath (Join-Path $env:RUNNER_TEMP 'TaxVault-Pro-Windows-Portable.zip') -CompressionLevel Optimal
 
       - name: Upload portable Windows ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: QLKHOVATFIX-Windows-Portable
-          path: ${{ runner.temp }}/QLKHOVATFIX-Windows-Portable.zip
+          name: TaxVault-Pro-Windows-Portable
+          path: ${{ runner.temp }}/TaxVault-Pro-Windows-Portable.zip
           if-no-files-found: error
           retention-days: 14

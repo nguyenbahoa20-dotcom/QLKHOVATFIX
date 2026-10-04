@@ -4,7 +4,7 @@ Dim shell, fso, appFolder, psScript, command, launchCode, url
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 appFolder = fso.GetParentFolderName(WScript.ScriptFullName)
-psScript = appFolder & "\KhoiDongApp.ps1"
+psScript = appFolder & "\TaxVaultPro.ps1"
 url = "http://127.0.0.1:3000/"
 
 ' Wait for this launch attempt to finish. The PowerShell mutex allows only

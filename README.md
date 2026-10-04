@@ -1,4 +1,4 @@
-# QLKHOVATFIX — Quản lý kho và hóa đơn VAT
+# TaxVault Pro — Quản lý kho và hóa đơn VAT
 
 Ứng dụng gồm giao diện React, máy chủ Express và cơ sở dữ liệu SQLite. Không thể triển khai dưới dạng trang GitHub Pages tĩnh.
 
@@ -6,9 +6,13 @@
 
 1. Giải nén ZIP bằng **Extract All**; không chạy ứng dụng bên trong cửa sổ ZIP.
 2. Không cần cài Node.js riêng: gói Windows mang theo Node.js portable trong thư mục `runtime`.
-3. Lần đầu, kết nối Internet rồi nhấp đúp `KhoiDongApp.vbs`. Ứng dụng sẽ tự cài các thư viện từ `package.json`/`package-lock.json`, chờ máy chủ sẵn sàng rồi mới mở trình duyệt. Không cần chạy `chay_phan_mem.bat` trước.
+3. Lần đầu, kết nối Internet rồi nhấp đúp `TaxVaultPro.vbs`. Ứng dụng sẽ tự cài các thư viện từ `package.json`/`package-lock.json`, chờ máy chủ sẵn sàng rồi mới mở trình duyệt. Không cần chạy `chay_phan_mem.bat` trước.
 4. Khi ứng dụng mở lần đầu, tạo tên đăng nhập và mật khẩu cho tài khoản Admin. Admin có thể tạo tài khoản Admin hoặc User trong nút **Tài khoản**.
-5. Những lần sau, nhấp đúp `KhoiDongApp.vbs`. Sau khi đã cài thư viện, chạy ứng dụng được khi offline. Tính năng Gemini cần Internet.
+5. Những lần sau, nhấp đúp `TaxVaultPro.vbs`. Sau khi đã cài thư viện, chạy ứng dụng được khi offline. Tính năng Gemini cần Internet.
+
+### Cấu hình Gmail
+
+Ứng dụng hiện lưu một tài khoản Gmail dùng chung cho phần mềm. Để đổi sang Gmail của công ty khác, nhập địa chỉ và App Password mới rồi chọn **Lưu Cấu Hình**; cấu hình trước đó sẽ bị thay thế. Chọn **Xóa cấu hình** để xóa thông tin Gmail khỏi ứng dụng. Để thu hồi App Password ở phía Google, xóa riêng mật khẩu ứng dụng trong phần bảo mật của tài khoản Google.
 
 Nếu VBS báo không khởi động được, nhấp đúp `chay_phan_mem.bat` để xem thông báo lỗi trong cửa sổ. Các thư viện JavaScript sẽ được tự tải ở lần chạy đầu, nên máy cần Internet lúc đó. Nếu thư mục `runtime` bị thiếu, launcher sẽ tải Node.js portable chính thức và kiểm tra mã SHA-256 trước khi dùng. Không cần cài Python hay SQLite riêng.
 
@@ -18,7 +22,7 @@ Gửi toàn bộ thư mục dự án đã giải nén hoặc ZIP phát hành cho
 
 ### Tạo gói Windows từ GitHub
 
-Sau khi các thay đổi launcher được chấp nhận, mở **Actions → Package Windows portable app → Run workflow**. Khi quy trình hoàn tất, tải artifact `QLKHOVATFIX-Windows-Portable` ở cuối trang chạy. Gói có Node.js portable đã kiểm tra SHA-256; không có cơ sở dữ liệu, tệp `.env`, hay thư viện cài sẵn. Máy nhận cần Internet ở lần chạy đầu để cài thư viện ứng dụng.
+Sau khi các thay đổi launcher được chấp nhận, mở **Actions → Package Windows portable app → Run workflow**. Khi quy trình hoàn tất, tải artifact `TaxVault-Pro-Windows-Portable` ở cuối trang chạy. Giải nén thư mục `TaxVault Pro`, rồi mở `TaxVaultPro.vbs`. Gói có Node.js portable đã kiểm tra SHA-256; không có cơ sở dữ liệu, tệp `.env`, hay thư viện cài sẵn. Máy nhận cần Internet ở lần chạy đầu để cài thư viện ứng dụng.
 
 User có thể xem và nhập dữ liệu nhưng không thể xóa hóa đơn/lịch sử, xóa hàng khỏi kho, làm sạch dữ liệu hoặc phục hồi bản sao lưu. Các thao tác này dành cho Admin. Sau khi máy chủ khởi động lại, người dùng cần đăng nhập lại. Không đưa máy chủ phát triển ra Internet.
 
